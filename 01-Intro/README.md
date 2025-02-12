@@ -88,3 +88,35 @@ Once you've added all these specifications click `Launch`
 You should be automatically taken to the `My Interactive Sessions` page, which will show the job you've just submitted. 
 
 Once the job starts to run you should see a `Connect to RStudio Server` button. *Sometimes a page refresh helps*
+
+### 3. Intro to RStudio
+
+When you connect to your RStudio job it will automatically load some environment settings and most likely set your personal $HOME directory as the working directory.
+
+> [!NOTE]
+> You can customize your rstudio preferences in Tools > Global Options...
+> OnDemand automatically sources preferences saved in `$HOME/.config/rstudio/rstudio-prefs.json` 
+> So you can set up RStudio how you like and it will be the same every time you launch with OnDemand
+
+RStudio is an Interactive Development Environment (IDE) for using the R programming language. It provides a point-and-click interface as well as command line, script running, and notebook functionalities. 
+RStudio has a multi-pane layout. A **source** pane, a **console/terminal** pane, an **environment** pane, and a **files/plots/help/etc** pane. 
+The source pane shows actively open R scripts or notebooks.
+The console/terminal pane provides a R console for running R functions, and a unix terminal to interact with your file system. 
+
+First let's set the working directory to the class directory we just made in `/work`. 
+
+In the RStudio console run (replace {PATH TO DIR} with your personal project directory path you just made.):
+```
+setwd('{PATH TO DIR}')
+```
+
+Then in the files pane, click on the "gear" icon and select "Go To Working Directory".
+
+You should now see all the files in our class directory.
+
+The material for today is under `01-Intro`.
+There you'll find a comprehensive introduction to RStudio and R with more detail then we have time to go through today. 
+
+For now open a new notebook by clicking File > New File > R Notebook
+
+The rest of this section will be interactive and will be a summary of the content in `01-Intro/01-Intro.Rmd`
