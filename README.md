@@ -9,7 +9,7 @@ There are 8 sections in this course and each has it's own R notebook that can ei
 
 ## Outline
 
-01 - Intro to OnDemand and R
+01 - [Intro to OnDemand and R](01-Intro/README.md) Intro to OnDemand and R
 - We will cover how to connect to UNC OnDemand and start RStudio, as well as an introduction to programming in R and installing packages.
  
 02 - scRNA-seq methods and data structures
