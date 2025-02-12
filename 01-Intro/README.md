@@ -25,22 +25,17 @@ cd /work/users/[First letter in Onyen]/[Second letter in Onyen]/[Onyen]
 > `/work` is designed for activate projects, the hardward supports faster read/write of files. You have a 10Tb storage capacity on `/work` but don't leave things there indeffinitely. 
 > Use `/proj` or `/users` for long term storage of files you aren't actively using.  
 
-### 4. Make a project directory in your `/work` space
 
-```
-mkdir hsl-scRNA
-```
-
-### 5. Sync the contents of your `hsl-scRNA` directory with the main course directory.
+### 4. Sync the contents of your `hsl-scRNA` directory with the main course directory.
 We have set up a space on LongLeaf to store all example data and notebooks. We can use the `rsync` UNIX command to keep our new `hsl-scRNA` directory on `/work` up-to-date with the main one. 
 
 ```
-rsync -a hsl-scRNA/ /overflow/scrnaseq/workshop/public_data
+rsync -av /overflow/scrnaseq/hsl-scRNA/ hsl-scRNA
 ```
 
-> [!NOTE]
-> We will update that directory every week before class with new material.
-> You can rerun the `rsync` command above before each class to grab any updates in the main directory.
+This will create a new directory called hsl-scRNA. You can rerun the above command to update this directory before each class.
+**But make sure not to run it inside the hsl-scRNA directory, you must be in your main work directory, one level above `hsl-scRNA/` for this command to work correctly.
+
 
 #### Alternative - Getting files from Github
 
