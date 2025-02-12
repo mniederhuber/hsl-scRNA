@@ -1,0 +1,1008 @@
+---
+title: "Intro to R"
+author: 'Matt Niederhuber'
+date: '8/26/24'
+output:
+  html_document:
+    theme: cosmo
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    code_folding: show
+---
+<style>
+body {
+text-align: justify}
+</style>
+
+```{r, echo=FALSE}
+library(emo)
+#jis[grepl('broom',jis$name),]
+#ji('book')
+```
+
+# 1.0 Overview of R `r emo::ji("glowing star")`
+
+R is both a programming language and software environment designed for statistical computation and data visualization that has been around for more than 30 years.  While other languages like Python are generally more accessible and "more popular" in certain areas, R has been widely adopted in data science and bioinformatics. That's because the core functionality of R has been massively extended through thousands of open-source software "packages". Many of these packages don't just provide neat statistical models to analyze genomics data, but *significantly* improve data management, manipulation, modeling, and visualization. 
+
+In my personal opinion, the real power and utility of R for bioinformatics comes from the wealth of packages available (and always being developed). 
+
+"Base" R provides a command line interface called the "console" that allows you to run a number of functions and make simple plots out of the box. RStudio (aka Posit) is a more powerful "Integrated Development Environment" or IDE for R. *note that "The R Project" and "RStudio/Posit" are not the same organization/company.*
+
+## 1.1 The RStudio IDE 
+RStudio allows users to work from a command line interface, edit and run R scripts, edit and run R markdown files (just like this one), manage projects, visualize plots, and navigate files. The RStudio IDE has a default layout with 4 "panels".
+
+- "Source"
+- "Console, Terminal,..."
+- "Environment, History, Connections"
+- "Files, Plots, Packages,..."
+
+![https://docs.posit.co/ide/user/2023.06.2/ide/guide/ui/ui-panes.html](https://docs.posit.co/ide/user/2023.06.2/ide/guide/ui/images/rstudio-panes-labeled.jpeg)
+
+These can be fully customized if you want. 
+
+The "Source" panel shows the file you're editing. It can have multiple files open at once, organized as tabs.
+
+The "Console, Terminal," panel has the console where you have an R command line interface, and a terminal with access to the system shell.
+
+The "Environment, History, Connections" panel has information about all of the objects, functions etc. that are currently saved in your environment. As well as a running record of commands that have been run. 
+The environment will normally be cleared when you end your RStudio session, and it can be manually cleared by clicking the "broom" icon.
+
+The "Files, Plots, Packages, Help,..." panel has a file navigator as well as a useful tab for managing packages and accessing package documentation. 
+
+## 1.2 R Notebooks
+
+One of the most useful things about RStudio is the ability to run notebooks. If you've ever worked with Jupyter Notebooks in Python the idea is basically the same. An R "notebook" combines text (using markdown for formatting) and code "chunks" that can be interactively run in the notebook.\
+
+    ```{r eval=TRUE}`r ''`
+    n = 10
+    rnorm(x)
+    ```
+    
+Notebooks are a great way to document projects and make tutorials, but I also love using notebooks for data exploration and development. 
+
+I often start of projects with a notebook so I can write notes, organize code into discrete chunks, and quickly see visualizations (which I'll demonstrate later). Then when it comes time to formalize a project I'll typically transition my notebook code to discrete R scripts.
+
+We can open a new notebook by clicking 'File -> New File -> R Notebook'. Go ahead and try opening a new notebook.
+
+The first thing you'll see is some default information and code. There's a YAML header with basic info about the notebook like name and how the notebook will be rendered. Then there's information about how to make a new code chunk *Ctrl+Alt+I* and how to run chunks *Ctrl+Shift+Enter*.
+
+Try making a new chunk. And let's run a simple command.
+```{r}
+print('Hello World!')
+```
+
+You can also run chunks by clicking the green "play" icon in the top-right of the chunk.
+
+You should see the output below the chunk, and also in the RStudio Console panel. Now try running the same command directly in the RStudio console.
+
+There's a lot more that you can do with RStudio that we don't have time to cover today, for instance you can run other languages like Bash and Python in R notebook code chunks. But for now we'll move on to some basic R programming concepts.
+
+# 2.0 Getting Started `r emo::ji("student")`
+
+## 2.1 Assigning Objects
+
+Just like other languages, R has it's own syntax for assigning variables (aka objects). An object is basically any named *thing* in R, it could be a single number, a list of names, the output of a function, or a large complex dataset.
+
+In R there are three operators for assigning objects, '=' and '<-' and '<<-'. 
+
+We're going to ignore the last one today because it's not commonly used. Confusingly, '=' and '<-' are *largely* identical and can often be used interchangeably. 
+
+For example both of the follow assignments are correct:
+```{r}
+apple <- 10
+banana = 10
+
+print(apple)
+print(banana)
+```
+
+*Generally* it is considered good stylistic practice to use '<-' outside of functions, and '=' when specifying named arguments inside functions.
+
+There are (apparently) some weird cases where '<-' and '=' may function differently, but for now we'll just stick to the conventional style.
+
+For example: 
+```{r, eval = FALSE}
+test1 <- 5.4321 # this is best
+test2 = 1.2345 # this is fine, but not "good style"
+round(test1, digits = 0) # this is best
+round(test2, digits <- 0) # considered "bad" style
+```
+
+*NOTE* you'll notice I added some text in that chunk with a "#" before it. This is the syntax in R to "comment". Anything following a "#" on that line will not be evaluated.
+
+For the most part you can name an object whatever you want as long as you follow these rules/guidelines:
+
+1. an object name cannot start with a number!
+2. give objects simple but descriptive names
+3. try to use a common style like `camelCase` or `snake_case`
+2. be careful not to use an object name that is also a function - this is mostly a style rule to avoid confusing code. 
+
+For example:
+```{r, eval=FALSE}
+# this will produce an error
+1a <- 'test' 
+```
+
+```{r}
+print <- 'test'
+print(print) # the function still works even though there's now a character object of the same name, it's just messy code
+```
+
+
+## 2.2 Data Structures in R
+There are 5 core data structures in R.\
+- Atomic Vectors
+- Lists
+- Matrices
+- Dataframes
+- Arrays
+
+These all differ in their dimensionaly (1d, 2d, Nd) and the data that's stored in them (all the same type or a mix of types).\
+
+Briefly, datatypes in R include decimal numbers (double), integers, letters/words (character), factors, and True/False (logical). \
+
+- **Atomic Vectors** are 1d vectors of the same data type.
+- **Lists** are also 1d vectors but can have a mix of data types.
+- **Matrices** are 2d (columns and rows) structures where all values are the same data type.
+- **Dataframes** are 2d structures that can have a mix of data types. 
+- **Arrays** are higher order n-dimensional structures of the same data type.
+
+Let's go a bit deeper on working with some of these structures.
+
+# 3.0 Vectors `r emo::ji("bow and arrow")`
+
+R is really all about vectors and running functions on vectors. A vector is either "Atomic" meaning it has all the same data type or a "list" with a mix of types.
+
+## 3.1 Creating atomic vectors
+To make atomic vectors we use the `c()` function, which stands for "combine".
+
+```{r}
+# this is a character atomic vector
+c('this','is','a','character','vector')
+# this is an integer atomic vector
+c(1,2,3,4)
+```
+
+What happens if we mix data types with `c()`? 
+
+First let's try combining integers and characters...
+```{r}
+# if we add an integer and a logical type with these words, everything becomes a character type.
+c(1,TRUE,'this','is','a','character','vector')
+```
+
+What about combining logicals (TRUE, FALSE) with integers...
+```{r}
+c(TRUE,FALSE,20,2,1)
+```
+
+What happened? Our output is a vector of integers. That's because in R logical values have a numeric equivalency. TRUE = 1, FALSE = 0. 
+
+This demonstrates how `c()` "coerces" everything into the same type, in this case converting TRUE and FALSE to 1 and 0. 
+
+## 3.2 Changing types
+
+It's often useful to check or change the type of an atomic vector. Let's demonstrate this by first making a new vector and assigning it an object name.
+```{r}
+my_numbers <- c(1.1,3.9292,0.0002,4.12) 
+my_numbers
+```
+
+Here we have an atomic vector of doubles. Notice how the values have been coerced to the same number of decimal places. 
+
+We can check the datatype with the `typeof()` function.
+```{r}
+typeof(my_numbers)
+```
+
+And we can convert types in R using one of the functions `as.character()`,`as.numeric()`,`as.integer()`,`as.double()`,`as.logical()`.
+
+What happens if we try to convert `my_numbers` to `character` type versus to `integer` type.
+```{r}
+as.character(my_numbers)
+as.integer(my_numbers)
+```
+
+What happened when we converted to `integer`? All the double values were simplified to integers but *not rounded*.
+
+Now let's try something that shouldn't work, making a new vector of characters and converting it to `numeric` type...
+```{r}
+letters <- c('a','b','c')
+as.numeric(letters)
+```
+
+In this case we get a *Warning* that the coercion created NA values, meaning that the coercion didn't really work. But notice that this is a *Warning* and not an explicit *Error*. The code **did run** and new values were created, they're just all NA. NA values in R are essentially Null or missing values. 
+
+Also note that *Warning* messages are common in R and while many of them can be safely ignored, in some cases they could be pointing to a real problem.
+
+### 3.2.1 Factors
+
+Brief pit stop to explain the `factor` datatype. These are a special type in R that are used for categorical values and thus can be very useful. 
+
+Factors are most like `character` vectors, but also have `levels` which are the total number unique "categories/values" in the vector.
+
+```{r}
+# here is an example with a integer vector
+# it has 9 values, but only 5 *distinct* values
+nums <- c(1,1,1,1,2,3,4,4,5)
+# if we convert it to a factor, we now see that we have 5 levels and 9 values
+factor(nums)
+```
+
+The order of a factor's levels can impact how the vector is used by functions, for instance when plotting. We can change the factor levels by explicitly indicating the order.
+
+```{r}
+factor(nums, levels = c(5,4,3,2,1))
+```
+
+
+## 3.3 Lists
+What if we want to maintain a mix of types in our vector? Well then we need a *list* which we can make with `list()`.\
+
+```{r}
+my_list <- list(1,2,3.5,'this','is','a','character','vector',TRUE,FALSE)
+my_list
+```
+
+You should get an output where each input data type is retained in the list. 
+
+Lists are there own special "type". ie. `typeof()` on a list should return `list`. But we can still do type coercion on lists. For example:
+```{r}
+as.character(my_list)
+```
+
+Doing this both standardizes the data type *and* converts the list into an atomic vector. *NOTE* that this is inherently different than making a list with all the same data type, that is still a list until it's been explicitly changed.
+
+For example, we can covert a list directly to a vector without with the `unlist()` function.
+```{r}
+unlist(my_list)
+```
+
+Because character is the most "accessible" type to standardize the mixed types in `my_list`, `unlist()` coerces everything to character. Compare that to `unlist()` with a list of integers, where the resulting vector contains integers.
+```{r}
+unlist(list(1,2,3,4))
+```
+
+
+## 3.4 Working with vectors
+
+So what can we do with vectors? 
+
+In R vectors have an "index", an integer value indicating position in the vector. Using square brackets [ ] we can use an index to pull out a single value...
+```{r}
+my_numbers
+my_numbers[1]
+```
+
+In R vectors are indexed starting at 1. Which is notably different from Python which is indexed starting at 0. In this manner we can select several values, a range of values, or take everything *but* a certain value.
+
+We can access multiple values from the vector by indexing with another vector...
+```{r}
+my_numbers[c(1,3)]
+```
+
+Or take a range of values...
+```{r}
+my_numbers[2:4]
+```
+
+Or grab everything *but* a certain index...
+```{r}
+my_numbers[-2] 
+```
+
+We can also add new values to an existing vector with the `append()` function.
+```{r}
+append(my_numbers, 10.1)
+```
+
+Importantly, `append()` does not alter the input object, it just creates an output with the new value added to the input vector. If we want to update the initial vector we have to explicitly reassign.
+```{r}
+my_numbers <- append(my_numbers, 10.1)
+```
+
+Another important quality of vectors is that in R many functions are designed to take vectors as inputs.
+
+You've already seen that in some of the examples above. But there are a number of base R functions for computing statistics on a vector of numbers.
+```{r, eval=FALSE}
+my_numbers
+mean(my_numbers)
+median(my_numbers)
+sd(my_numbers)
+var(my_numbers)
+quantile(my_numbers)
+```
+
+These functions only take atomic vectors as inputs and won't work correctly if we try to pass in a list, even if they have a consistent datatype. But notice again how the code below does *run* it just produces a *warning* and outputs NA. 
+```{r}
+mean(list(1,2,3,4,5))
+```
+
+## 3.5 Vector Exercises 
+
+1. Make a new vector of 6 numbers named 'counts' with the type `character`.
+2. Convert the 'counts' vector to `double`.
+3. Add another value to the 'counts' vector.
+4. Extract the first, second, and fourth values from the vector.
+5. Calculate the mean and standard deviation of the 'counts' vector.
+
+### Answers
+```{r, eval = F, class.source = 'fold-hide'}
+counts <- c('1.2','3.06','2.222','0.5','0.1','0.01')
+counts <- as.double(counts)
+counts <- append(counts, 2.31)
+counts[c(1,2,4)]
+mean(counts)
+sd(counts)
+```
+
+# 4.0 Dataframes `r emo::ji('house')` 
+
+If vectors are the foundation of R, then dataframes are the house. They are essentially *lists* of **equal length** atomic vectors. Each vector is a column with each value as a row.
+
+![geeksforgeeks.org](https://media.geeksforgeeks.org/wp-content/uploads/20200414224825/f115.png)
+Dataframes can be any number of rows and columns, can be sorted, merged, and split into parts. You will likely spend most of your time in R making, manipulating, and plotting dataframes. 
+
+## 4.1 Making dataframes 
+
+There are a couple of common methods to create dataframes in R. The first is to use the `data.frame()` function and the other is to import existing data from a .csv or .tsv file (more on that later). 
+
+The `data.frame()` function takes "named" vectors as inputs...
+```{r}
+df <- data.frame(a = c('Matt','Sally','Emily','Tracey'), 
+                 b = c(36,35,2,5), 
+                 c = c('tacos','fries','apples','candy'))
+df
+```
+
+That gives us a simple dataframe with 3 columns (variables) and 4 rows. Note that in the notebook output the type of each variable is displayed indicating how these are essentially different atomic vectors. 
+
+Column names (and optionally row names) can be reassigned with functions `colnames()` and `rownames()`. Both functions take a dataframe as input and then new names can be specified with another character vector like so.
+```{r}
+colnames(df) <- c('name','age','food')
+df
+```
+This is often useful particularly when importing data that may not have names or may have confusing names. 
+
+## 4.2 Subsetting and combining
+
+One of the most common things you'll need to do is extract parts of a dataframe or combine different dataframes. There are a number of ways to do these operations. 
+
+We can get specific columns, rows, values, and apply logical filtering. For example because dataframes are lists and columns are named we can directly access a column with the `$` operator.
+```{r}
+df$name
+```
+
+Alternatively we can use square brackets like we did above with single vectors. Indexing dataframes follows the syntax [row, column], but you don't always have to include a comma as you'll see below.
+```{r}
+#gives us the first element in the dataframe list, which is column 1
+df[1] 
+
+#gives all three columns
+df[1:3] 
+
+#we can also use names with brackets
+df['name']
+
+# If we want a specific row, 
+df[1,]
+
+# or one value in a column
+df[2,'name']
+```
+
+## 4.3 Logical subsetting
+We can also do more complex subsetting with logical comparisons. In the context of our example dataframe this would let us get the names of anyone younger than 30 (for example). We do this using the evaluation of a logical test as the indexing vector for the dataframe.
+```{r}
+df[df$age < 30,]$name
+```
+This might look confusing at first so let's break it down. First let's just run our logical test on its own.
+
+```{r}
+# This gives a logical vector from our age vector, indicating if each age is less than 30 or not. 
+age_check <- df$age < 30
+age_check
+# Now we insert that logical vector as our indexes to the dataframe
+df[age_check,] # we add the comma to indicate we need rows back, not columns
+
+# And if we just want the names...
+df[age_check,]$name
+```
+
+*Side note*, I used the logical operator `<` in the example above. There are several logical operators in R:
+`<` - less than
+`>` - greater than
+`<=` - less than or equal to
+`>=` - greater than or equal to
+`==` - equal to
+`!=` - not equal to
+
+These can be used to compare numbers as well as check if two character values are equivalent such as
+```{r}
+'apple' == 'banana'
+```
+
+There is also the `%in%` operator, which allows for checking if a number or character is in a vector.
+```{r}
+1 %in% c(2,3,4,5)
+```
+
+
+## 4.4 Combining dataframes
+There are two base R functions available out of the box to combine dataframes, `cbind()` for merging column-wise and `rbind()` for row-wise.
+```{r}
+# here's a new dataframe... 
+df2 <- data.frame(colors = c('red','blue','green','pink'),
+                  animals = c('owl','tiger','bird','unicorn'))
+
+# and we want to combine with our existing one, adding thes new vectors as columns.
+cbind(df,df2)
+
+# we can also just bind in a single column if we want.
+cbind(df, dessert = c('ice_cream','cake','popscicle','cupcake'))
+```
+
+What happens if we try to bind a new column (or dataframe) with a different number of rows than what's in the original dataframe? Try for yourself.
+```{r}
+#cbind(df, dessert = c('cake','popscicle','cupcake'))
+```
+You should get an error message because `cbind()` needs all vectors to have the same length.
+
+If instead we want to add some new values to our first dataframe we can use `rbind()`.
+```{r}
+df3 <- data.frame(name = c('Liz','Jerry'), age = c(65,68), food = c('rice','chicken'))
+rbind(df,df3)
+```
+What happens if we don't have the same vector names or a typo in our new dataframe? Try for yourself.
+```{r}
+df3 <- data.frame(n = c('Liz','Jerry'), age = c(65,68), food = c('rice','chicken'))
+#rbind(df,df3)
+```
+For `rbind()` to work it has to find matching vector names for all vectors of the two dataframes.
+
+Note that we are not limited to binding a just two dataframes, as long as the vectors are the same length or have the same name we can do these operations on any number of dataframs/vectors.
+
+There is also the base R `merge()` function to combine two dataframes by common columns or rows. This is very useful in cases where we have two dataframes with some shared information but not the same order of rows and we need to map in missing data.
+```{r}
+ages <- data.frame(name = c('Matt','Sally','Emily','Tracey'), 
+                   age = c(36,35,2,5))
+
+foods <- data.frame(name = c('Emily','Tracey','Sally','Matt','Todd'),
+                    food = c('apples','candy','fries','tacos','pineapple'))
+
+# merge takes at most 2 dataframes as input, and a `by` argument to specify what variable to merge on
+# in absence of `by` merge will look for shared variables automatically
+merge(ages, foods, by = 'name')
+```
+
+## 4.5 Importing Data
+
+Most of the time the data you work with in R will already exist as some kind of table or spreadsheet, and you'll need to import that data into R. For example a table of transcript counts from an RNA-seq experiment. Importing and exporting data is straightforward with the `read.csv()` and `read.table()` functions. 
+
+Let's load an example dataset called "Iris" from 'iris.csv'. *Note* this dataset is from a collection of example datasets that are available with R which can be directly accessed with the `data()` function, I've gone ahead and saved it as a csv just for this example.
+```{r}
+iris <- read.csv('../example/iris.csv')
+head(iris) # the head() function is really useful when working with larger dataframes, it returns just the first few rows (default n = 6). 
+```
+
+## 4.6 Dataframe Exercises
+
+1. Make a dataframe with three vectors of different types.
+2. Change the column names 
+3. Add another column 
+4. Get a single value using row/column indexing
+5. Using a logical test to subset the dataframe  
+6. Save the subset to your home directory `~/R_workshop_test.csv`
+
+### Answers
+
+```{r, eval= F, class.source = 'fold-hide'}
+new <- data.frame(a = c(1,2,3,4),
+                  b = c('elm','spruce','dogwood','willow'),
+                  c = c(22.3,50.1,101.1,97.9))
+
+colnames(new) <- c('rank','tree','age') 
+
+new <- cbind(new, width = rnorm(4, mean = 100, sd = 50))
+
+new[1,2]
+
+new_subset <- new[new$width < 100,]
+
+#write.csv(new_subset, file = '~/R_workshop_test.csv')
+```
+
+# 5.0 Functions `r emo::ji('robot')` 
+
+## 5.1 Writing functions
+We've been using functions throughout this workshop, but what exactly are they? A function is just a discrete chunk of code that takes a number of *inputs* and *arguments* and performs some standard task with those inputs. 
+
+So instead of having to manually program the calculation of the mean we can just use the `mean()` function. When you first start working in R you'll likely stick to these prebuilt functions either from base R or installed packages, like we have above. But we can also write our own custom functions to perform any number of repetitive tasks. Custom or "user-defined" functions offer a powerful method for automating and organizing your analysis.
+
+Here's an example. Let's say we have a large RNA-seq dataset from cancer patients with many associatd clinical variables. We want to do differential gene expression analysis but we're interested in comparing several of these variables, for instance 'smoking' vs 'non-smoking', 'biomarker positive' vs 'negative', 'male' vs 'female', etc, etc. We could just write our code then copy and paste it for every different contrast we want to explore. That works, but it's messy. Not only that it can cause a lot of problems if for instance we need to update the code we'll have to carefully make our changes in multiple repetive sections, increasing the chance we mess something up. This is where functions can make your life much easier. 
+
+Instead of copying and pasting a similar set of operations over and over again, we can write a single generalized function that we can use repeatedly. This makes our analysis cleaner and much easier to modify.
+```{r, eval=FALSE}
+# This is a rough example of how you might draft a function to automate running DESeq with any number of input contrasts
+runDESeq <- function(dds, contrast, formula) {
+  formula <- as.formula(formula)
+  design(dds) <- formula  
+  
+  dds <- DESeq(dds)
+  res <- results(dds, contrast = contrast)
+  
+  return(res)
+}
+
+runDESeq(dds, c('smoking_non-smoking', 'smoking','non-smoking'), '~smoking_status')
+runDESeq(dds, c('male_female', 'female','male'), '~gender')
+runDESeq(dds, c('bioPlus_bioNeg', 'bioPlus','bioNeg'), '~bioMarker')
+```
+
+
+## 5.2 Installing packages
+
+While there are a lot of useful functions availble in base R the real power of R comes from the huge number of packages freely available to download. 
+
+A package in R is basically a collection of functions. There are a two main public repositories for R packages that you'll commonly use: 
+
+- "The Comprehensive R Archive Network" CRAN https://cran.r-project.org/ 
+- "Bioconductor" https://www.bioconductor.org/ -- specific for bioinformatics 
+
+We can install new packages with the function `install.packages()`. Downloaded packages are stored in a system "library", by default R makes a library in your $HOME directory. 
+
+Something like:
+`/nas/longleaf/home/ID/R/x68_64-pc-linux-gnu-library/4.4`. 
+
+The library path is specific to the underlying system architecture (x68_64...) and the R version you're currently using (4.4). You can check your R library path with the `.libPaths()` function.
+```{r, eval=F}
+.libPaths()
+```
+
+For the sake of time we won't install anything today, but an example would look like...
+```{r, eval=FALSE}
+install.packages('PACKAGENAME')
+```
+
+And then to remove packages...
+```{r, eval=FALSE}
+remove.packages('PACKAGE_NAME')
+```
+
+Once a package has been installed we have to explicitly load it into our environment with the `library()` function like so...
+```{r, eval=FALSE}
+library(package_name) # once installed the package name is an object, so no quotes
+```
+
+Sometimes different packages will have the same or similar function names, at worst this can cause conflicts where a package will supercede the function of another package, at best it can get confusing which functions are coming from what packages. 
+
+To overcome this confusion I will often avoid loading too many packages at once and instead directly call functions from specific functions like so:
+```{r, eval=FALSE}
+package_name::function_name()
+```
+
+It's not always the best choice, and it takes a bit more typing, but generally I find this method helpful for keeping track of functions. 
+
+## 5.3 Loops and Control-Flow
+
+Sometimes we need to run the same function on each value in a vector or dataframe. One way that we can achieve this is by using "loops". If you're familiar with loops in other programming languages the idea is the same in R. 
+
+A loop takes a vector and works with each item until the end of the vector. In R the syntax for writing loops is:
+```{r}
+for (x in 1:10) {
+  print(x/2)
+}
+```
+
+*Note* that in R the for loop will assign the loop variable to the "global environment", that means if we have a variable already called "x" it will be overwritten by the for loop and retain the value of the last element in the vector parsed by the loop. 
+```{r}
+x <- 100
+for (x in 1:10) {}
+x
+```
+
+So be careful when assigning variables in for loops. 
+
+We can also introduce "flow-control" into our loops (and functions) with conditional `If/Else` statements. The general syntax of If/Else statements in R looks like:
+```{r}
+# if the condition is True
+condition <- TRUE
+if (condition) {
+  print('do a thing')
+} else {
+  print('do something else')
+}
+```
+
+We can integrate an If/Else control into a for loop to conditionally perform functions.
+```{r}
+for (x in 1:10){
+  if (x <= 5) {
+    print(x/2)
+  } else if (x == 6){
+    print(x*2)
+  } else {
+    print(x-10)
+  }
+}
+```
+Hopefully you can appreciate that we can construct sophisticated data flows with loops and If/Else controls.
+
+## 5.4 Applys
+
+Now that I've demonstrated what you can do with 'for loops', I'm going to tell you why you should never* use them in R. 
+
+That's because in R standard loops can be slower and offer less control. The alternative are the `apply` functions: `apply()`, `lapply()`, `sapply()`, `vapply()`, `mapply()`, and `tapply()`. These generally work the same as loops but are often faster and enforce a specific type of output (indicated by the fist letter in the function names, eg. list output with `lapply()`). 
+
+Here's a nice visualization of apply functions from Hadley Wickham (CSO of RStudio):
+
+![https://adv-r.hadley.nz/functionals.html](https://d33wubrfki0l68.cloudfront.net/f0494d020aa517ae7b1011cea4c4a9f21702df8b/2577b/diagrams/functionals/map.png){#id .class width=60%}
+
+Here's a very simple example of a for loop and the equivalent apply function...
+```{r}
+
+names <- c('bob','tom','sarah','mary')
+
+# using a for loop at the `toupper()` function to make names all caps
+names_2 = c()
+for (name in names){
+  names_2 <- append(names_2, toupper(name))
+}
+names_2
+
+# now with an apply function
+# vapply() returns an atomic vector, and we can specify the desired output data type with FUN.VALUE
+names_2 <- vapply(names, toupper, FUN.VALUE = character(1), USE.NAMES = F) # a single line of code
+names_2
+```
+
+We can also use custom functions with apply:
+```{r}
+names_2 <- vapply(names, function(x) {
+  if (x != 'bob') {
+    new_name = toupper(x)
+  } else {
+    new_name = 'BARB'
+  }
+  return(new_name)
+}, FUN.VALUE = character(1), USE.NAMES = F)
+
+names_2
+```
+
+Apply functions can be very useful and are almost always the better choice than using traditional loops. Though admittedly they can be a bit finicky to use at times, it's definitely worth it in the long run to adopt them over standard loops.
+
+## 5.5 Exercises
+
+1. Write a simple function to convert Fahrenheit to Celsius. The conversion is `°C = (°F - 32) × 5/9`
+2. Make a vector for fahrenheit temperatures and use a loop to convert each temp to celsius with your new function. 
+2. Now try to use `lapply()` instead of a loop to make a list of celsius values.
+
+### Answers
+
+```{r, eval= F, class.source = 'fold-hide'}
+FtoC <- function(f) {
+  c <- (f - 32) * 5/9
+  return(c)
+}
+
+temps <- c(50.2, 88.1, 97.5, 30.0)
+
+c_temps <- c() 
+for (t in temps) {
+   c_temps <- append(c_temps, FtoC(t))
+}
+
+c_temps <- lapply(temps, FtoC)
+```
+
+
+# 6.0 Data Visualization with ggplot `r emo::ji('artist')`
+
+Data visualization is one of the top reasons R is such a popular language for data analysis. It is easy to make publication quality graphics with sophisticated labelling, grouping, and coloring. R comes with plotting functionality "out of the box" with the `plot()` function. 
+
+Let's use a different example dataset called `mtcars` which is data from the 1974 Motor Trend road tests. 
+
+```{r}
+head(mtcars)
+
+# assigning the rownames (which are the model names) to a separate vector so it can be used for plotting 
+mtcars$model <- rownames(mtcars)
+```
+
+## 6.1 base R Plots
+
+With the mtcars example dataset we can easily make a scatter plot of the car weight to mpg trend. We just have to tell `plot()` what vectors from the dataframe to plot.  
+
+```{r}
+# at the simplest, plot takes an x-axis and y-axis argument. 
+plot(mtcars$wt, mtcars$mpg)
+```
+
+While the `plot()` function is capable of doing quite a bit there is an external package called `ggplot2` that I would argue is so much better at making high-quality plots that it's not even really worth learning to use `plot()`. 
+
+## 6.2 `ggplot2`
+
+`ggplot2` is a package with *a lot* of powerful functions for making really informative and aesthetically pleasing plots in R. https://ggplot2.tidyverse.org/ 
+It really deserves it's own workshop to fully demonstrate but we'll quickly cover some of the basics.
+
+One of the main differences between `ggplot` and `plot` in base R is that `ggplot` takes dataframes as inputs, wherase `plot` takes specific vectors as arguments. 
+
+The other major difference is the `ggplot` syntax, which looks like `ggplot_object + plot_layer + plot_layer + ...`
+
+Let's demonstrate. First we make a `ggplot` object.
+
+```{r}
+library(ggplot2)
+
+# pass the dataframe as the first argument, and then an aesthetics function `aes()` to sepcify which vectors in the dataframe we want to plot
+plot <- ggplot(mtcars, aes(hp, mpg))
+plot
+```
+
+This makes a ggplot object, which we've stored as "plot", but you'll see that even though we have the right axes and values nothing is actually plotted. That's were the 'plot layers' come in. We have to specify how the data in the ggplot object is going to be used using additional functions, primarily "geometric objectsion" or `geoms`.
+
+## 6.3 Geoms
+
+We specify plots in `ggplot` with `geoms` which are functions that generate plots from the ggplot object to layer onto our plot.
+
+Some geoms I frequently use are:
+- `geom_point()` - for scatterplots
+- `geom_boxplot()` or `geom_violin()` - for distribution plots
+- `geom_bar()` or `geom_col()` - for bar graphs
+
+But there are more than **40** different `geom` functions to work with for making everything from simple plots to making more complex plots that calculate models and/or additional statistics. 
+
+A nice list of all geoms (and other `ggplot2` functions): [ggplot2 Functions](https://ggplot2.tidyverse.org/reference/)
+
+So, to make a scatterplot from our 'plot' `ggplot` object we simply add a layer with `geom_point()` like so...
+
+```{r}
+# we use + to add on new layers to the plot
+plot +
+  geom_point()
+```
+
+## 6.4 Layering geoms 
+
+We can add multiple layers in sequence to our `ggplot` object, overplotting additional information onto the original scatterplot. For instance, we can compute and plot a regression model with the `geom_smooth()` function and add that as a layer. 
+
+```{r}
+plot +
+  geom_point() +
+  geom_smooth(method = 'loess') # we can specify the type of model (lm, glm, loess) withe the `method` argument
+```
+
+Or we could add another layer to label all of our points with the car model name.
+
+```{r}
+plot +
+  geom_point() +
+  geom_text(aes(label = model), hjust = -0.1)
+```
+
+*Note* there's a great package called [ggrepel](https://github.com/slowkow/ggrepel) that actually makes plotting text labels *much* cleaner. 
+
+## 6.5 Mapping colors
+
+Grouping and color plots is critical to making informative and visually exciting figures. There are a number of easy ways to add layers of information with coloring using `ggplot`.
+
+For example, what if we want to also visualize how another variable maps to our scatter plot? For instance, how does the negative correlation correspond to number of cylinders? To do this we can specify our 'hp' vector to be used for mapping color.
+
+```{r}
+ggplot(mtcars, aes(mpg, hp, color = cyl)) +
+  geom_point()
+```
+
+That's somewhat useful, we can see that engines with fewer cylinders have low horse power and higher miles per gallon. \
+But 'hp' only has a few discrete values (4,6,8) and here we're using a **continuous color scale** which is hard to read. \
+That's happening because 'hp' is a `double` type. Let's try converting 'hp' to a categorical variable with `factor`.
+
+```{r}
+ggplot(mtcars, aes(mpg, hp, color = factor(cyl))) +
+  geom_point(size = 4) +
+  scale_color_brewer(palette = 'Set1')
+```
+
+That's a lot better. We've also adjusted the point size, and specified a color palette with the `scale_color_brewer()` function. \
+There are a number of palletes available with `ggplot` that you can see here:
+- [scale-brewer](https://ggplot2.tidyverse.org/reference/scale_brewer.html)
+- [brewer scales](https://ggplot2-book.org/scales-colour#brewer-scales)
+
+
+## 6.6 `ggplot` exercises
+
+1. Use `geom_boxplot()` to make a boxplot of 'hp' values for *each* cylinder category.
+2. Use `geom_point()` to add a layer of points on the boxplot 
+3. Map the vector 'mpg' to color the points. 
+4. Change the color scale with `scale_color_brewer` and the `RdPu` palette. 
+
+### Answers
+
+```{r, eval= T, class.source = 'fold-hide'}
+
+plot <- ggplot(mtcars, aes(factor(cyl), hp, fill = mpg)) +
+  geom_boxplot(outliers = F) + 
+  geom_point(position = position_dodge2(width = 0.4), shape = 21, size = 3, alpha = 0.7) +
+  scale_fill_distiller(palette = 'RdPu') +
+  ggtitle('Beautiful Plot') +
+  xlab('Cylinders') +
+  ylab('Horse Power') 
+
+plot
+```
+
+## 6.7 Saving
+When we want to save a `ggplot` we can use the `ggsave()` function. We can save to a number of formats (pdf, png, tiff, jpeg) and specify size and resolution.
+
+```{r, eval=F}
+ggsave('demo_plot.png', plot, width = 5, height = 6)
+```
+
+# 7.0 Tidy data and the Tidyverse `r emo::ji('broom')`
+
+Another highly useful and arguably essential set of packages for data analysis in R is the `tidyverse`, which is really a set of many packages. Together they improve on many of the basic R functions and methods, and are all based on a shared underlying data design philosophy such they all the packages work together pretty seamlessly. 
+
+## 7.1 The tidy data philosophy
+
+It's not uncommon that we have data that looks something like this, each row is a different country with values for population in millions for 1990, 2000, and 2010. 
+
+```{r}
+pops <- data.frame(country = c('France','England','Germany','Italy'),
+           Pop_1990 = c(58,40,80,56),
+           Pop_2000 = c(61,42,85,60),
+           Pop_2010 = c(64,46,84,59))
+
+pops
+```
+
+This looks like how we often structure datasets when using spreadsheet software like Excel, and we can make plots with data like this with that kind of software. But in R this is a very cumbersome organization. 
+
+For example, we can't easily plot how population is changing by time because time isn't a variable, its part of the column name. Or if we wanted to determine what years France had a population below 62 million, this dataframe organization makes that tricky.  
+
+This is where the concept of 'tidy data' comes in. 
+
+![https://r4ds.had.co.nz/tidy-data.html#tidy-data-1](https://d33wubrfki0l68.cloudfront.net/6f1ddb544fc5c69a2478e444ab8112fb0eea23f8/91adc/images/tidy-1.png)
+
+Tidy data follows these rules:
+1. each variable has its own column
+2. each observation is its own row
+3. each value has its own cell 
+
+For our example above that would look like this.
+
+```{r}
+data.frame(country = c('France','England','Germany','Italy',
+                       'France','England','Germany','Italy',
+                       'France','England','Germany','Italy'),
+                   population = c(58,40,80,56,61,42,85,60,64,46,84,59),
+                   year = c(1990,1990,1990,1990,2000,2000,2000,2000,2010,2010,2010,2010))
+```
+
+Now we have variables for country, year, and population and can easily subset and plot.
+
+## 7.2 The Tidyverse
+
+The tidyverse is a collecetion of many pacakges all designed to make, manipulate, and utilize tidy data. They are all very well made packages with very good documentation and instructions. I honestly do not think I would use R as much as I do if not for the tidyverse. 
+
+Several core Tidyverse packages are:
+
+- [`dplyr`](https://dplyr.tidyverse.org/) - the toolbox for tidy data
+- [`tidyr`](https://tidyr.tidyverse.org/) - functions to make data tidier
+- [`magrittr`](https://magrittr.tidyverse.org/) - pipes!
+- [`forcats`](https://forcats.tidyverse.org/) - functions for factors
+- [`purr`](https://purrr.tidyverse.org/) - apply functions for tidy data
+- [`ggplot2`](https://ggplot2.tidyverse.org/) - oh hey! we know this one already
+
+There are many more, but these are the ones I use regularly.  
+
+We do not have time to go into much detail but I would like to just briefly demonstrate how some of these packages work. 
+
+## 7.3 Tidyr
+
+The Tidyr package is here to help clean up your data. It has some super useful functions to easily manipulate dataframes into tidy formats. 
+
+Going back to our poorly organized population data, we can easily convert it into a tidy format with the `pivot_longer()` function. 
+
+```{r}
+# we specify our input dataframe, what columns we want to pivot, 
+# and then optionally if we want to specify names for the new columns
+tidyr::pivot_longer(pops, 
+                    cols = c(Pop_1990, Pop_2000, Pop_2010), 
+                    names_to = 'year', 
+                    values_to = 'population')
+```
+
+There is also the companion function `pivot_wider` which does the opposite of `pivot_longer`, and expands a single column into multiple columns. This can be useful for instance when making a matrix of data for plotting heatmaps, where each sample has its own column. 
+
+Tidyr has a number of other useful functions, but these are the two I use regularly to quickly reshape dataframes. 
+
+## 7.4 Dplyr
+
+The Dplyr package is aptly named because it really does provide a data toolbox. It's a set of easy to use functions to change, subset, group, and summarise the data in dataframes.
+
+We can add or change columns in dataframes with the `mutate()` function.
+
+```{r}
+# here we pass in our mtcars dataframe
+# and round up our mpg column
+dplyr::mutate(mtcars, 
+              mpg = round(mpg, digits = 0)) 
+```
+
+Or quickly subset our dataframe with complex logic using `filter()`. 
+
+```{r}
+dplyr::filter(mtcars, 
+              mpg > 20 & hp > 95 | cyl == 4)
+```
+
+Or summarise our data. 
+
+```{r}
+dplyr::summarise(mtcars, 
+                 mean_mpg = mean(mpg),
+                 sd_hp = sd(hp),
+                 max_wt = max(wt))
+```
+## 7.5 Magrittr
+
+The real elegance of Dplyr and the other packages of the Tidyverse is evident when you start using pipes. 
+
+If you're familiar with pipes in Bash, the idea is the same in R. We can use a pipe operator to pass the output of one function to the input of the next. 
+
+There is actually a pipe operator built in to base R, `|>`. But the Magrittr package provides another pipe operator `%>%` that improves on the base version.
+
+We can use pipes to perform a number of operations in sequence. 
+
+```{r}
+library(magrittr)
+head(mtcars)
+mtcars %>%
+  dplyr::mutate(model = rownames(.),
+                mpg = round(mpg, digits = 0),
+                cyl = as.factor(cyl)) %>%
+  dplyr::filter(wt > 3) %>%
+  dplyr::group_by(cyl, model) %>%
+  dplyr::summarise(mean_mpg = mean(mpg)) %>%
+  ggplot(aes(mean_mpg, model, fill = cyl)) +
+  geom_bar(stat = 'identity', position = position_dodge(), alpha = 0.7) +
+  scale_fill_brewer(palette = 'Set1')
+  
+  
+```
+In my experience pipes make my R code and environment cleaner, because it avoids uneccessarily storing intermediate steps as objects. It also lends well to functionalizing code. 
+
+# 8.0 Package management
+
+When working on multiple projects or preparing projects for publication it's *really* important to maintain a record of your development environment. By environment I mean, the R version, packages, and the package versions that were used in your analysis. Unfortunately, most people have to learn this the hard way.
+
+The problem arises from using a common library of packages across multiple projects and over time. Installing packages with `install.packages()` will place everything in a common library (usually in your home directory).But this is not a "static environment", it will change as you install new package updates and new R versions. **There is nothing directly connection your R code to a particular R environment.** 
+
+Here's an example: you've been working on a project and have code for your analysis that uses the "common" library. You take a break from this project for a couple of months to help out someone with their scRNA-seq analysis, in the meantime you install some new tools, update some old packages, maybe switch over to the newest version of R. When you come back to your first project the output of your analysis now looks different, maybe the number of significant genes is slightly different or maybe your code doesn't run at all because there's some kind of new package conflict. This is a sadly common story. 
+
+This can be a headache to correct. At worse it can mean that a collaborator (or even reviewer) can't replicate your analysis.
+
+If only we could set up a package library for each project and track a project-specific environment. 
+
+This is exactly what `renv` does. It provides an easy to use set of functions to initialize project libraries, keep them in sync with your code, and record everything you've used. It makes it simple to report your methods and share the environment with collaborators or the public when it's time to publish. 
+
+There is a great tutorial for `renv` here: [Introduction to renv](https://rstudio.github.io/renv/articles/renv.html) that walks through exactly what `renv` does and how to start using it. 
+
+But this is my personal plug to encourage everyone to start using this kind of package management / virtual environment in your own projects.
+
+# 8.0 Additional Resources
+
+[RStudio Education](https://education.rstudio.com/)
+
+[R for Data Science](https://r4ds.had.co.nz/)
+
+[Tidyverse](https://www.tidyverse.org/)
+
+[R Graph Gallery](https://r-graph-gallery.com/)
+
+[ggplot2: Elegant Graphics for Data Analysis](https://ggplot2-book.org/)
+
+[Posit Cheatsheets](https://posit.co/resources/cheatsheets/)
