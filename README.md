@@ -32,3 +32,11 @@ There are 8 sections in this course and each has it's own R notebook that can ei
 
 08 - Differential Analysis 
 - In this final class we will go through how to perform a pseudo-bulk differential gene expression analysis between different clusters/cell types identified in a sc dataset.
+
+# How to follow along in this class
+
+Each section will have an R notebook and a corresponding rendered html file. 
+
+In each section we'll use the R notebook as an interactive guide. 
+
+You are encouraged to start your own R notebook that you keep and add to during the course, hopefully by the end of the course you'll have a complete example analysis that you can reference. 

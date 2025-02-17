@@ -36,6 +36,9 @@ rsync -av /overflow/scrnaseq/hsl-scRNA/ hsl-scRNA
 This will create a new directory called hsl-scRNA. You can rerun the above command to update this directory before each class.
 **But make sure not to run it inside the hsl-scRNA directory, you must be in your main work directory, one level above `hsl-scRNA/` for this command to work correctly.
 
+>[!NOTE]
+> Any changes made to files within the repository will be **overwritten** by `rsync`.
+> If you want to make notes or edits to any of the course material -- you should make a personal copy so you don't lose your work by accident.
 
 #### Alternative - Getting files from Github
 
@@ -115,3 +118,4 @@ There you'll find a comprehensive introduction to RStudio and R with more detail
 For now open a new notebook by clicking File > New File > R Notebook
 
 The rest of this section will be interactive and will be a summary of the content in `01-Intro/01-Intro.Rmd`
+
