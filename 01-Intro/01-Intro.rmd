@@ -16,8 +16,6 @@ body {
 text-align: justify}
 </style>
 
-# 01 - Intro
-
 The goal of this section is to make sure everyone is roughly on the same page before diving into analysis.
 
 We'll try to quickly cover some R basics that we'll use throughout the course. 
@@ -49,8 +47,8 @@ There are 2 operators for assigning variables in R.
 '<-' and '='. 
 They are functionally equivalent.
 
-x <- 10
-y = 10
+x <- 10 \
+y = 10 \
 are the same.
 
 ```{r}
@@ -64,22 +62,18 @@ In our sections you'll see that I try to use "<-" outside of functions,
 and "=" inside of functions. 
 
 # Data Structures
-There are 5 core data structures in R.\
-- Atomic Vectors
-- Lists
-- Matrices
-- Dataframes
-- Arrays
-
-These all differ in their dimensionaly (1d, 2d, Nd) and the data that's stored in them (all the same type or a mix of types).\
-
-Briefly, datatypes in R include decimal numbers (double), integers, letters/words (character), factors, and True/False (logical). \
+There are 5 core data structures in R.
 
 - **Atomic Vectors** are 1d vectors of the same data type.
 - **Lists** are also 1d vectors but can have a mix of data types.
 - **Matrices** are 2d (columns and rows) structures where all values are the same data type.
 - **Dataframes** are 2d structures that can have a mix of data types. 
 - **Arrays** are higher order n-dimensional structures of the same data type.
+
+These all differ in their dimensionaly (1d, 2d, Nd) and the data that's stored in them (all the same type or a mix of types).\
+
+Briefly, datatypes in R include decimal numbers (double), integers, letters/words (character), factors, and True/False (logical). \
+
 
 ### Vectors
 
@@ -103,8 +97,12 @@ x[x==3] # all elements of x that are equal to 3
 
 There are a set of functions available to change the type of a vector. 
 ```{r}
-as.numeric(y) # convert y to a numeric vector
 as.character(x) # convert x to a character vector
+```
+
+If we try to convert a vector of characters to numeric all values become NA.
+```{r}
+as.numeric(y) # convert y to a numeric vector
 ```
 
 There's also `as.logical()`, `as.factor()`, and `as.integer()`.
@@ -151,7 +149,7 @@ df[,1] # the first column of df
 
 df['name'] # the column named 'name'
 
-df[df$a == 'Matt',] # all rows where column a is 'Matt'
+df[df$names == 'Matt',] # all rows where column a is 'Matt'
 ```
 
 We just used the `==` operator to compare values.
