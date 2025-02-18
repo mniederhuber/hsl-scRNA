@@ -1,0 +1,51 @@
+---
+title: "01-Intro"
+author: 'Matt Niederhuber'
+date: '2/19/25'
+output:
+  html_document:
+    theme: cosmo
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    code_folding: show
+---
+<style>
+body {
+text-align: justify}
+</style>
+
+# Loading 10x Data
+
+```{r}
+# we set the default library to the longleaf shared library
+.libPaths("/nas/longleaf/rhel8/apps/r/4.4.0/lib64/R/library")
+library(Seurat)
+library(SeuratWrappers)
+library(magrittr)
+
+```
+
+```{r}
+ids <- c('PBMC_1','PBMC_2','PBMC_3','PBMC_4')
+
+# lapply() is a lot like a for loop, it takes a vector and runs a function with each element of the vector
+# here we just make a simple custom function to load our data
+sos <- lapply(ids, function(x){
+  # create the correct path for the data directory for the sample
+  dir = paste0('../data/',x,'/sample_filtered_feature_bc_matrix')
+  print(dir)
+ 
+  # now read in the data with Read10()
+  so = Seurat::Read10X(data.dir = dir) %>%
+    Seurat::CreateSeuratObject(project = x) # and then create the seurat object
+  
+  return(so)
+}) %>%
+  set_names(ids) # finally we give the elements of our list the id names
+
+sos
+```
+
+
