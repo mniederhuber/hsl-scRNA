@@ -147,7 +147,7 @@ You can subset dataframes with square brackets.
 df[1,] # the first row of df
 df[,1] # the first column of df
 
-df['name'] # the column named 'name'
+df['names'] # the column named 'name'
 
 df[df$names == 'Matt',] # all rows where column a is 'Matt'
 ```
