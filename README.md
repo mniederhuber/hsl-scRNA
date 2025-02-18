@@ -1,6 +1,6 @@
 # Introduction to Single Cell RNA (scRNA) Technologies and Analysis Methods
 
-Instructor - Matt Niederhuber Postdoc at the UNC Bioinformatics and Analytics Research Collaborative (BARC) \
+Instructor - Matt Niederhuber Postdoc at the UNC [Bioinformatics and Analytics Research Collaborative](https://www.med.unc.edu/barc/) (BARC) \
 TA - Tyler Interrante, Project Manager at BARC
 
 This course is intended to introduce students to a basic workflow for analyzing scRNA data, as well as some of the concepts behind key analysis steps like normalization, integration, and dimensionality reduction.
