@@ -15,4 +15,4 @@ Goals
 - 10x Xenium (imaging)
 - Complete Genomics Stereo-seq
 
-![](https://www.completegenomics.com/media/cell-stereo-seq-complete-genomics.web)
+![test](https://www.completegenomics.com/media/cell-stereo-seq-complete-genomics.web)
