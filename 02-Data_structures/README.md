@@ -17,17 +17,14 @@ Goals
 
 <img src="https://www.completegenomics.com/media/cell-stereo-seq-complete-genomics.webp" width = '25%'> 
 
-Because it's the most common technology right now we'll use 10x Chromium data as our example case for this course, but the basic methods and concepts are generalizable across all single cell methods. 
+## 10x Genomics - Chromium
 
-## 10x Chromium
+Because it's the most common assay right now we'll be using data from the 10x Genomics Chromium platform as our example case. 
+But the basic methods and concepts are generalizable across all single cell methods. 
 
-Chromium is a droplet based single cell method from 10x Genomics. 
-There are assays for 3' or 5' capture, and can be combined with multiomic approaches (ATAC-seq).
+Chromium is a droplet based single cell method. There are assays for 3' or 5' capture, and can be combined with multiomic approaches (ATAC-seq).
 
-The basic idea is a suspension of cells is combined with barcoded gel beads.
-The cells are mixed with beads at a dilution such that **most beads do not bind a cell**.
-
-<img src="https://cores.research.asu.edu/sites/default/files/inline-images/10X-reaction%20vesicle.png">
+The basic idea is that cell suspension is combined with barcoded gel beads at a limiting dilution such that **most beads do not bind a cell**. This means that most of the time if a bead binds a cell it will only bind a *single* cell.
 
 The bead-cell mixture is then passed through a microfluidic chip, mixed with enzyme, and then a oil channel 
 separates single cells in a oil bubble. 
@@ -35,12 +32,35 @@ These Gel beads in EMulsion (GEMs) are collected and inside each GEM, the cell i
 
 <img src="https://cdn.10xgenomics.com/image/upload/f_auto,q_auto,dpr_2.0,w_1200/v1723751588/products/Chromium/chromium-partitioning-library-prep.png">
 
-The technical features of this protocol has important impacts on how we analzye and interpret single cell RNA data. 
+<img src="https://cores.research.asu.edu/sites/default/files/inline-images/10X-reaction%20vesicle.png" width="60%">
 
-1. The RNA from a single cell will have a unique barcode (UMI) that identifies that cell.
+---
+The technical features of this technology have important impacts on how we analzye and interpret the data. 
 
-2. There will be many empty droplets that may have UMIs from the gel bead but no cell. 
+#### 1. Empty droplets
+There will be many empty droplets that do not capture a cell. But because there is often contaminating free RNA in the suspension these "empty" droplets will have RNA and need to be computationally filtered out.  
 
-3. Some/many cells will be dead or already lysed in the initial pool. 
+#### 2. Multiplets
+Beads can bind more than one cell.
+A single bead could have a Tcell and a Macrophage  and consequently be a "single cell" in the data. These "doublets" or "multiplets" have to be filtered out.
 
-4. The sensitivity of this technology is low -- we can only detect the top ~20% of RNA in a cell. 
+#### 3. Dead cells
+Some cells will be dead/dying and undergoing apoptosis. These have to be filtered out.
+
+#### 4. Low mRNA capture efficiency
+There are a number of technical factors of current single cell methods that significantly limit the rate at which mRNA is captured from a cell. 
+- small ammount of mRNA per cell
+- shallow sequencing depth per cell (~50k)
+- inefficient oligo-mRNA binding
+- inefficiences in reverse transcriptase reaction
+- overall small reaction volume per cell
+
+The newest 10x chemistries (v3) only capture around **20-30%** of mRNA per cell.
+
+A low rate of mRNA capture is the biggest limitation of single cell methods. It means that the output data is very sparse - many genes have 0 counts - and it is difficult to know if this is due to technical "dropout" or a gene is simply not expressed. 
+
+#### 5. High cell to cell variability
+In single cell experiments there is a large ammount of cell-to-cell variability in the number or reads and number of genes detected. How to correctly normalize and model variability in single cell data is an active area of study. 
+
+# Single Cell Data
+
