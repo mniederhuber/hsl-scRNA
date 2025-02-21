@@ -24,6 +24,16 @@ text-align: justify}
 library(Seurat)
 library(SeuratWrappers)
 library(magrittr)
+library(SingleR)
+library(ggplot2)
+library(ComplexHeatmap)
+library(forcats)
+library(devtools)
+library(data.table)
+library(SingleCellExperiment)
+library(SummarizedExperiment)
+library(sctransform)
+library(glmGamPoi)
 
 ```
 
@@ -46,6 +56,10 @@ sos <- lapply(ids, function(x){
   set_names(ids) # finally we give the elements of our list the id names
 
 sos
+
+so.test <- SCTransform(sos$PBMC_1)
+
+
 ```
 
 
