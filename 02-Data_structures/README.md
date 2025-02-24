@@ -62,5 +62,21 @@ A low rate of mRNA capture is the biggest limitation of single cell methods. It 
 #### 5. High cell to cell variability
 In single cell experiments there is a large ammount of cell-to-cell variability in the number or reads and number of genes detected. How to correctly normalize and model variability in single cell data is an active area of study. 
 
+
+# Sequencing depth
+
+10x Genomics recommends at least 20k reads per cell. But this is pretty shallow and likely would limit the number of uniquely identified genes. In certain experiments, sequencing saturation isn't seen until close to ~50k paired reads per cell. 
+
+<img src="/hsl-scRNA/images/Screenshot 2025-02-23 at 10.13.13 PM.png">
+
+Examples of sensitivity metrics as a function of read depth for a dataset of ~4,000 PBMCs (3 replicates).
+Somew
+
 # Single Cell Data
 
+
+
+# notes
+
+- how many cells do you need per experiments
+- read depth
