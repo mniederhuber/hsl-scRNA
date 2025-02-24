@@ -175,3 +175,9 @@ credit: Griffith Lab https://rnabio.org/module-08-scrna/0008/02/01/QA_clustering
 ### @reductions
 A list of dimensionality reductions. 
 
+# Scanpy
+
+`Scanpy` is a library of tools for single cell analysis in Python. 
+https://scanpy.readthedocs.io/en/stable/
+
+We won't cover `Scanpy` but if you are more comfortable working in Python than R this might be a great option for you. It is also probably a better choice for working with spatial single cell assays where image visualization/analysis is a priority.
