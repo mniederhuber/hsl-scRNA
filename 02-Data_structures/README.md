@@ -125,3 +125,53 @@ https://alevin-fry.readthedocs.io/en/latest/overview.html
 `cellRanger` is very commonly used, but has the downside of not offering total control over processing. \
 `alevin-fry` is open-source and thus offers a great deal of control over how reads and aligned and droplets are filtered. 
 
+## `Cellranger` output
+
+`cellRanger` aligns reads to a reference genome, counts reads in genes, and filters out likely empty droplets.
+
+![](/images/cellrangerOut.jpg)
+
+The standard filtered output can be found in `outs/filtered_feature_bc_matrix`.
+The directory contains files that together comprise a sparse matrix (only non-zero values recorded) in a MEX format of the counts data.
+
+- barcodes.tsv -- all cell barcodes in matrix.mtx 
+- genes.tsv -- all annotated genes, 2 columns (gene_id, gene_name)
+- matrix.mtx -- 3 column file with header (gene_id, cell_id, umi_counts) 
+
+https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/output/matrices
+
+The unfiltered (all cells kept) data can be found under `raw_feature_bc_matrix` if you'd like to handle droplet filtering on your own.
+
+`cellRanger` also generates the feature-barcode matrix in a Hierarchical Data Format (HDF5 or H5), which can be directly read by certain packages in R. 
+
+# Seurat
+
+>[!NOTE]
+>This is all relative to Seurat v5
+
+`Seurat` is a R package for loading, organizing, processing, and analyzing single cell data. 
+It was developed (and is actively maintained) by the Satija lab at NYU. 
+https://satijalab.org/seurat/
+
+`Seurat` provides a data "container" to store many data structures in different "slots" and "layers" related to an analysis within a single R object. 
+
+A seurat object contains multiple slots...
+
+### @metadata 
+A dataframe with row for each feature (gene), with related metadata like cell barcode, sample id, and anything else you want to add
+### @assays 
+A list of containers for each "assay". For most experiments there is only 1 "RNA" assay. Complex multi-modal experiments will have multiple "assay" slots, and some data transformations are stored in separate assay slots. Each assay has the following layers:
+- raw counts `layers='counts'`
+- normalized counts `layer='data'`
+- variance stabilized data `layer='scale.data'`
+- meta.features -- feature level metadata
+- var.features -- vector of features identified as variable
+
+By default, the raw data slot is filled when you first create a seurat object.
+<img src="https://rnabio.org/assets/module_8/seurat_object.initial.png">
+
+credit: Griffith Lab https://rnabio.org/module-08-scrna/0008/02/01/QA_clustering/
+
+### @reductions
+A list of dimensionality reductions. 
+
