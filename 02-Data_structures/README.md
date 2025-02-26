@@ -35,6 +35,8 @@ These Gel beads in EMulsion (GEMs) are collected and inside each GEM, the cell i
 
 <img src="https://cdn.10xgenomics.com/image/upload/f_auto,q_auto,w_900,dpr_2.0/v1709753672/blog/GEM-X%20Launch%20blog/vertical_flipped_GEM96_H1975_high_4_S0001.gif">
 
+https://cdn.10xgenomics.com/image/upload/f_auto,q_auto,w_900,dpr_2.0/v1709753672/blog/GEM-X%20Launch%20blog/vertical_flipped_GEM96_H1975_high_4_S0001.gif
+
 ---
 The technical features of this technology have important impacts on how we analzye and interpret the data. 
 
@@ -106,7 +108,8 @@ The typical output that you'll receive after sequencing will be demultiplexed fa
 
 These will include fastqs for Read_1, Read_2, and a library index read (for demultiplexing a pooled library). 
 
-<img src="https://davetang.org/muse/2018/06/06/10x-single-cell-bam-files/10x_library_fragment/">
+<img src="https://davetang.org/muse/2018/06/06/10x-single-cell-bam-files/10x_library_fragment/" width="50%">
+
 https://davetang.org/muse/2018/06/06/10x-single-cell-bam-files/  
 
 
@@ -130,6 +133,8 @@ https://alevin-fry.readthedocs.io/en/latest/overview.html
 `cellRanger` aligns reads to a reference genome, counts reads in genes, and filters out likely empty droplets.
 
 ![](/images/cellrangerOut.jpg)
+
+<img src="https://github.com/mniederhuber/hsl-scRNA/blob/main/images/cellrangerOut.jpg" width="50%">
 
 The standard filtered output can be found in `outs/filtered_feature_bc_matrix`.
 The directory contains files that together comprise a sparse matrix (only non-zero values recorded) in a MEX format of the counts data.
@@ -168,7 +173,8 @@ A list of containers for each "assay". For most experiments there is only 1 "RNA
 - var.features -- vector of features identified as variable
 
 By default, the raw data slot is filled when you first create a seurat object.
-<img src="https://rnabio.org/assets/module_8/seurat_object.initial.png">
+
+<img src="https://rnabio.org/assets/module_8/seurat_object.initial.png" width="50%">
 
 credit: Griffith Lab https://rnabio.org/module-08-scrna/0008/02/01/QA_clustering/
 
