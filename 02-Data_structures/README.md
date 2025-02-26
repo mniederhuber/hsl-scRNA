@@ -32,7 +32,6 @@ These Gel beads in EMulsion (GEMs) are collected and inside each GEM, the cell i
 
 <img src="https://cdn.10xgenomics.com/image/upload/f_auto,q_auto,dpr_2.0,w_1200/v1723751588/products/Chromium/chromium-partitioning-library-prep.png">
 
-
 <img src="https://cdn.10xgenomics.com/image/upload/f_auto,q_auto,w_900,dpr_2.0/v1709753672/blog/GEM-X%20Launch%20blog/vertical_flipped_GEM96_H1975_high_4_S0001.gif">
 
 https://cdn.10xgenomics.com/image/upload/f_auto,q_auto,w_900,dpr_2.0/v1709753672/blog/GEM-X%20Launch%20blog/vertical_flipped_GEM96_H1975_high_4_S0001.gif
@@ -84,7 +83,9 @@ How deeply to sequence single cell libraries is a balance of cost and desired se
 10x Genomics recommends at least 20k reads per cell. But this is pretty shallow and would likely undersample the number of uniquely identified genes. In certain experiments, sequencing saturation isn't seen until close to ~50k paired reads per cell. With the newer chemistries it seems to be even higher (>60k paired reads per cell; see link above). 
 
 For example, from 10x Genomics has the following analysis using 4,000 peripheral blood mononuclear cells (PMBCs)...
+
 ![~4,000 PBMCs (3 replicates)](/images/seqDepth.png)
+
 https://cdn.10xgenomics.com/image/upload/v1660261285/support-documents/CG000148_10x_Technical_Note_Resolving_Cell_Types_as_Function_of_Read_Depth_Cell_Number_RevA.pdf
 
 You get close to saturation with 20k reads but there are still meaningful gains at higher depts. 
