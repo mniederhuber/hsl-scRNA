@@ -133,8 +133,6 @@ https://alevin-fry.readthedocs.io/en/latest/overview.html
 
 `cellRanger` aligns reads to a reference genome, counts reads in genes, and filters out likely empty droplets.
 
-![](/images/cellrangerOut.jpg)
-
 <img src="https://github.com/mniederhuber/hsl-scRNA/blob/main/images/cellrangerOut.jpg" width="50%">
 
 The standard filtered output can be found in `outs/filtered_feature_bc_matrix`.
