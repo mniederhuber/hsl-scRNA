@@ -1,6 +1,8 @@
 ---
 title: "01-Intro"
+title: "01-Intro"
 author: 'Matt Niederhuber'
+date: '2/19/25'
 date: '2/19/25'
 output:
   html_document:
@@ -83,10 +85,24 @@ x <- c(1, 2, 3, 4, 5) # a vector of numbers
 typeof(x)
 y <- c("a", "b", "c", "d", "e") # a vector of characters
 typeof(y)
+x <- c(1, 2, 3, 4, 5) # a vector of numbers
+typeof(x)
+y <- c("a", "b", "c", "d", "e") # a vector of characters
+typeof(y)
 ```
 
 And we can access elements of vectors with square brackets.
+And we can access elements of vectors with square brackets.
 ```{r}
+x[1] # the first element of x
+y[3] # the third element of y
+
+x[1:3] # the first 3 elements of x
+
+x[x==3] # all elements of x that are equal to 3
+```
+
+There are a set of functions available to change the type of a vector. 
 x[1] # the first element of x
 y[3] # the third element of y
 
@@ -112,13 +128,23 @@ There's also `as.logical()`, `as.factor()`, and `as.integer()`.
 Factors are a special type of vector that is useful for categorical data.
 They are the same as vectors except they have "levels".
 A factors' "levels" are all the unique categories/instances in the vector.
+### Factors
+
+Factors are a special type of vector that is useful for categorical data.
+They are the same as vectors except they have "levels".
+A factors' "levels" are all the unique categories/instances in the vector.
 
 ```{r}
+factor(c("A","A","B","C","C","C")) # a factor with 3 levels: A, B, C
 factor(c("A","A","B","C","C","C")) # a factor with 3 levels: A, B, C
 ```
 
 ### Lists
+### Lists
 ```{r}
+# we use list() to make lists
+z <- list(1, "a", 2, "b") # lists can have a mix of data types
+typeof(z)
 # we use list() to make lists
 z <- list(1, "a", 2, "b") # lists can have a mix of data types
 typeof(z)
@@ -127,9 +153,17 @@ typeof(z)
 ### Dataframes
 Dataframes are the most common data structure in R. 
 They are basically a list of equal length vectors. 
+### Dataframes
+Dataframes are the most common data structure in R. 
+They are basically a list of equal length vectors. 
 
 You can create a dataframe with the `data.frame()` function.
+You can create a dataframe with the `data.frame()` function.
 ```{r}
+# a dataframe with 3 columns, and 4 rows
+df <- data.frame(names = c('Matt','Sally','Emily','Tracey'), 
+                 age = c(36,35,2,5), 
+                 favorite_food = c('tacos','fries','apples','candy'))
 # a dataframe with 3 columns, and 4 rows
 df <- data.frame(names = c('Matt','Sally','Emily','Tracey'), 
                  age = c(36,35,2,5), 
@@ -138,7 +172,12 @@ df
 ```
 
 Because a dataframe is a list of vectors, you can access columns with the `$` operator.
+Because a dataframe is a list of vectors, you can access columns with the `$` operator.
 ```{r}
+df$a
+```
+
+You can subset dataframes with square brackets.
 df$a
 ```
 
@@ -174,21 +213,42 @@ We can install new packages with the function `install.packages()`. Downloaded p
 
 Something like:
 `/nas/longleaf/home/{ID}/R/x68_64-pc-linux-gnu-library/4.4`. 
+`/nas/longleaf/home/{ID}/R/x68_64-pc-linux-gnu-library/4.4`. 
 
 ```{r, eval=FALSE}
 install.packages('PACKAGENAME')
+# and
+remove.packages('PACKAGENAME')
 # and
 remove.packages('PACKAGENAME')
 ```
 
 There are a couple of ways to load packages and use their functions. 
 The most common way is to use the `library()` function.
+There are a couple of ways to load packages and use their functions. 
+The most common way is to use the `library()` function.
 ```{r}
+library(dplyr)
 library(dplyr)
 ```
 
 The other option is to use the `::` operator.
+The other option is to use the `::` operator.
 ```{r}
+dplyr::select(df, age)
+```
+
+# Pipes
+
+Pipes are a way to chain functions together. 
+The output of one function is "piped" as the input to the next function.
+
+There are 2 main pipe operators in R. 
+`|>` from base R (as of R > 4.1.0)
+`%>%` from the `magrittr` package. 
+
+They are essentially the same, with some small differences.
+I use `%>%` out of habit. 
 dplyr::select(df, age)
 ```
 
@@ -206,6 +266,14 @@ I use `%>%` out of habit.
 
 ```{r}
 library(magrittr)
+
+df %>% 
+  dplyr::mutate(tacos = ifelse(favorite_food == 'tacos', T, F)) 
+```
+
+# Resources
+
+I have a more indepth notebook on R basics here [Intro to OnDemand and R](01-Intro/01-Intro.html)
 
 df %>% 
   dplyr::mutate(tacos = ifelse(favorite_food == 'tacos', T, F)) 

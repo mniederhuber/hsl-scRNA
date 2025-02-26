@@ -1,0 +1,211 @@
+---
+title: "01-Intro"
+author: 'Matt Niederhuber'
+date: '2/19/25'
+output:
+  html_document:
+    theme: cosmo
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    code_folding: show
+---
+<style>
+body {
+text-align: justify}
+</style>
+
+# Loading 10x Data
+
+## Setup
+
+First we'll load the Seurat libraries, magrittr (for pipes), and ggplot2 (a plotting package).
+We will also set `.litPaths()` to the shared app space on the cluster.
+
+Library paths tell Rstudio where you want to install and source packages. When running Rstudio server with OnDemand your home directory and the app shared space are set as the primary library paths by default. To avoid any confusion or conflicts with libraries you may have already installed in your home directory, we're going to explicitly set `.libPaths()` to exclude any library in your home directory. 
+
+```{r}
+# we set the default library to the longleaf shared library
+.libPaths("/nas/longleaf/rhel8/apps/r/4.4.0/lib64/R/library")
+library(Seurat)
+library(SeuratWrappers)
+library(magrittr)
+library(ggplot2)
+
+# we make a vector of sample ids that match our data directories
+ids <- c('PBMC_1','PBMC_2','PBMC_3','PBMC_4')
+```
+
+## PMBC Example data
+
+We're going to use peripheral blood mononuclear cell (PBMC) data from 10x Genomics. 
+https://www.10xgenomics.com/datasets/20k_Human_Donor1-4_PBMC_3p_gem-x_multiplex
+
+This data includes 2 Male and 2 Female samples, with ~4-6k cells per sample (~20k total). 
+*note that these samples were actually mutliplexed (all mixed together on the same 10x chip lane), hence fewer cells per sample. 
+
+The `cellRanger` QC report for these data can be found here: https://cf.10xgenomics.com/samples/cell-exp/9.0.0/20k_Human_Donor1-4_PBMC_3p_gem-x_multiplex_5k_Human_Donor1_PBMC_3p_gem-x/20k_Human_Donor1-4_PBMC_3p_gem-x_multiplex_5k_Human_Donor1_PBMC_3p_gem-x_web_summary.html
+
+## Loading feature-barcode matrices 
+
+The `data/` directory has a subdirectory of feature-barcode matrix data for each of the 4 samples. 
+
+`Seurat` has a number of utility functions for reading a different single cell data. We'll use `Read10()` to load our example data.
+
+You'll see that the output of this function is a sparse matrix of features (genes) as rows, and cell barcodes as columns. 
+```{r}
+pbmc_1 <- Seurat::Read10X('../data/PBMC_1/sample_filtered_feature_bc_matrix')
+pbmc_2 <- Seurat::Read10X('../data/PBMC_2/sample_filtered_feature_bc_matrix')
+pbmc_3 <- Seurat::Read10X('../data/PBMC_3/sample_filtered_feature_bc_matrix')
+pbmc_4 <- Seurat::Read10X('../data/PBMC_4/sample_filtered_feature_bc_matrix')
+
+# head is base R function to return just the first few rows of a matrix or dataframe
+head(pbmc_1)
+```
+
+In order to use the `Seurat` workflow, we next need to load our sparse matrix of counts into a seurat object with the `CreateSeuratObject()` function.
+
+We'll just reassign our pbmc objects to the new ouputs.
+
+Now you'll see that we have "objects of class Seurat". 
+
+```{r}
+
+# we can pass an optional name for each project to uniquely identify them
+pbmc_1 <- Seurat::CreateSeuratObject(pbmc_1, project = 'PBMC_1')
+pbmc_2 <- Seurat::CreateSeuratObject(pbmc_2, project = 'PBMC_2')
+pbmc_3 <- Seurat::CreateSeuratObject(pbmc_3, project = 'PBMC_3')
+pbmc_4 <- Seurat::CreateSeuratObject(pbmc_4, project = 'PBMC_4')
+
+# combine them into a list for simplicity
+# and set the names with the ids vector we made above
+sos <- list(pbmc_1, 
+            pbmc_2, 
+            pbmc_3, 
+            pbmc_4) %>%
+  set_names(ids)
+
+sos
+```
+
+## loading with lapply()
+
+In the above chuncks I've written each step out line by line to make it explicit what're doing. 
+
+Here's an example how to streamline these steps with an `apply` function...
+```{r}
+
+# lapply() is a lot like a for loop, it takes a vector and runs a function with each element of the vector
+# here we just make a simple custom function to load our data
+sos <- lapply(ids, function(x){
+  
+  # create the correct path for the data directory for the sample
+  dir = paste0('../data/',x,'/sample_filtered_feature_bc_matrix')
+ 
+  # now read in the data with Read10()
+  so = Seurat::Read10X(data.dir = dir) %>%
+    Seurat::CreateSeuratObject(project = x)  # and then create the seurat object
+  
+  return(so)
+}) %>%
+  set_names(ids) # finally we give the elements of our list the id names
+
+# now we have a named list of all of our seurat objects
+sos
+```
+
+# Seurat essential commands
+
+The default seurat object has a single assay 'RNA' with the raw unormalized counts in the `counts` layer.
+
+There are a few ways we can access the data inside a seurat object. 
+
+We can use '[ ]' to directly get specific assays... 
+
+```{r}
+sos$PBMC_1[['RNA']]
+```
+You'll see that our assay only has data in the counts layer because we haven't done any kind of normalization or data scaling yet.
+
+We can access data in the layers with `$`...
+```{r}
+sos$PBMC_1[['RNA']]$counts %>%
+  head()
+```
+
+Alternatively we can access the assays slot with `@`...
+```{r}
+sos$PBMC_1@assays$RNA$counts %>%
+  head()
+```
+
+### cell and metadata
+
+We can access the cell barcodes in the assay with `Cells()`
+```{r}
+Seurat::Cells(sos$PBMC_1) %>%
+  head()
+
+```
+
+And the metadata with `@meta.data`. Which is a dataframe. 
+
+```{r}
+sos$PBMC_1@meta.data
+```
+
+The metadata contains information about each cell in the data (rows). 
+
+- `orig.ident` identity name of the project
+- `nCount_RNA` number of unique RNA molecules found in each cell
+- `nFeature_RNA` number of unique genes found in each cell
+
+### Subsetting
+
+It's often useful to split our data into different subsets, for instance if we need to filter out certain cells.
+
+We can subset using the `subset()` function.
+
+Here we subset our PBMC_1 sample to just the first 100 cells. A more common subsetting we'll use later is to subset to a specific cluster or annotated cell type for differential analysis.
+
+```{r}
+subset(sos$PBMC_1,
+       cells = colnames(sos$PBMC_1)[1:100])
+```
+
+# Merging samples
+
+So far we have loaded our 4 example datasets and worked within them as separate objects. But we can actually "merge" our data into a single Seurat object and still keep the samples separate as distinct layers. In Seurat v5 several common operations have been updated to automatically process these layers separately, making it much easier to work with multiple samples/replicates/conditions. 
+
+To merge our seurat objects we use the `merge()` function, which takes at minimum 2 arguments, the first is the initial object, and the second can be one or more objects to merge in.
+
+```{r}
+# we'll rename our new merged object 
+so <- merge(sos$PBMC_1, c(sos$PBMC_2, sos$PBMC_3, sos$PBMC_4))
+so
+```
+You'll see that this single seurat object now has 4 layers within the 'RNA' assay, each with a unique name corresponding to the 'project' variable we set when we initally loaded the data. 
+
+The metadata now has all cells across all data. 
+
+```{r}
+sos$PBMC_1@meta.data$orig.ident %>%
+  unique()
+
+so@meta.data$orig.ident %>%
+  unique()
+```
+
+# Saving
+
+Because a lot of the steps in our analysis can take a while to run, especially for a larger dataset, it's good practice to periodically save your seurat objects. 
+
+```{r}
+save(so, file = '../so.RData')
+```
+
+
+
+
+
