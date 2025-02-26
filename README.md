@@ -12,7 +12,7 @@ There are 8 sections in this course and each has it's own R notebook that can ei
 01 - [Intro to OnDemand and R](01-Intro/README.md)
 - We will cover how to connect to UNC OnDemand and start RStudio, as well as an introduction to programming in R and installing packages.
  
-02 - scRNA-seq methods and data structures
+02 - [scRNA-seq methods and data structures](02-Data_structures/README.md)
 - A brief review of scRNA-seq technologies (10x Genomics Chromium, Parse Biosciences, Complete Genomics Stereo-seq), and their data outputs. We will go over what some of these data look like and how they are organized. 
   
 03 - Quality control
