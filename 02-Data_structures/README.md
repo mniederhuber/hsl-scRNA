@@ -24,7 +24,7 @@ But the basic methods and concepts are generalizable across all single cell meth
 
 Chromium is a droplet based single cell method. There are assays for 3' or 5' capture, and can be combined with multiomic approaches (ATAC-seq).
 
-The basic idea is that cell suspension is combined with barcoded gel beads at a limiting dilution such that **most beads do not bind a cell**. This means that most of the time if a bead binds a cell it will only bind a *single* cell.
+The basic idea is that cell suspension is combined with barcoded gel beads at a limiting dilution such that **most beads do not pair with a cell**. This means that most of the time if only a single cell will end up with a bead in a droplet.
 
 The bead-cell mixture is then passed through a microfluidic chip, mixed with enzyme, and then a oil channel 
 separates single cells in a oil bubble. 
@@ -42,7 +42,7 @@ The technical features of this technology have important impacts on how we analz
 There will be many empty droplets that do not capture a cell. But because there is often contaminating free RNA in the suspension these "empty" droplets will have RNA and need to be computationally filtered out.  
 
 #### 2. Multiplets
-Beads can bind more than one cell.
+Beads can end up in a droplet with more than one cell.
 A single bead could have a Tcell and a Macrophage  and consequently be a "single cell" in the data. These "doublets" or "multiplets" have to be filtered out.
 
 #### 3. Dead cells
