@@ -72,3 +72,8 @@ Two common computational approaches are...
 There is no right way to filter single cell data.  
 
 The decision of how to filter must be informed by your own review of the data, the clusters and cell anotations, in combiation with your understanding of the underlying biology. 
+
+# Other resources
+
+https://pmc.ncbi.nlm.nih.gov/articles/PMC9793662/
+Analysis of common qc metrics across a variety of cell types.

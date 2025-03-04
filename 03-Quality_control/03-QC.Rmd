@@ -1,0 +1,298 @@
+# 03-QC
+
+```{r}
+.libPaths("/nas/longleaf/rhel8/apps/r/4.4.0/lib64/R/library")
+library(Seurat)
+library(SeuratWrappers)
+library(magrittr)
+library(ggplot2)
+
+load('../so.RData')
+```
+
+## Find mitochondrial genes 
+
+The percent of mitochondrial genes in each cell is a key metric we want to examine. 
+
+To find the percentage mitochondrial genes we can search for the character pattern `MT-`
+
+**NOTE** the pattern match is case-sensitive, so it's a good idea to double check how mitochondrial genes are annotated in your reference.
+
+We can do that with `grep()` which is a pattern matching function.
+
+```{r}
+# we can use regular expressions in our pattern match
+# "^" means to anchor at the start of the line/string
+# our pattern is uppercase MT-
+grep('^MT-',rownames(so), value = T)
+
+# will not return anything... 
+grep('^mt-',rownames(so), value = T)
+
+# you could also do a catch all using the "|" or operator
+grep('^mt-|^MT-',rownames(so), value = T)
+```
+
+To calculate the percent mitochondrial we can use the Seurat function `percentageFeatureSet()`.
+
+This function can be used to quickly calculate percentage of any feature (gene) in a cell using feature names or character patterns to match multiple features. 
+
+```{r}
+# we can create a new column in our metadata with double square brackets
+so[['percent.mt']] <- so %>%
+  Seurat::PercentageFeatureSet(pattern = '^MT-')
+
+# alternatively, we can give a column name and it will automatically add to the object metadata
+#so <- so %>%
+#  Seurat::PercentageFeatureSet(pattern = '^MT-', col.name = 'percent.mt')
+
+so@meta.data
+```
+
+
+## Visualizing QC
+
+Now we have the metrics to do our QC. 
+
+- nCount_RNA -- number of unique molecules (UMI) per cell 
+- nFeature_RNA -- number of unique genes detected per cell
+- percent.mt -- percentage of all counts assigned to mitochondrial genes 
+
+Violin plots are a good first step for visualizing the distribution of these metrics across the dataset. 
+
+```{r}
+# in both plots i'm excluding points overplot to make the violins visible
+
+# Seurat has a convenience function for making violin plots (wraps ggplot)
+Seurat::VlnPlot(so, features = c('nCount_RNA','nFeature_RNA','percent.mt'), pt.size = 0)
+
+# or if you prefer more control you can use ggplot
+so@meta.data %>%
+  tidyr::pivot_longer(cols = c('nCount_RNA','nFeature_RNA','percent.mt')) %>% # this pivot will take our three metric columns and combine them into a single column 'name'
+  ggplot(aes(orig.ident, value, fill = orig.ident)) +
+  geom_violin() + 
+#  geom_point(position = position_jitter(width = 0.3), size = 0.1, alpha = 0.05) +
+  facet_wrap(~name, scales = 'free')
+  
+```
+
+The distributions in each metric look relatively similar for each sample, except PBMC_4 has lower average counts and features, and higher average percent mitochondrial gene counts.
+
+This could mean that there's more noise (dead cells, left ofter empty droplets) in this sample than the others. 
+
+```{r}
+so@meta.data %>%
+  tidyr::pivot_longer(cols = c('nCount_RNA','nFeature_RNA','percent.mt')) %>%
+  ggplot(aes(orig.ident, value, fill = orig.ident)) +
+  geom_boxplot(outlier.shape = NA) +
+  facet_wrap(~name, scales = 'free')
+```
+
+An alternative way we can plot these distributions is using `geom_density()` from `ggplot2` or the `ggridges` package. 
+
+```{r}
+library(ggridges)
+
+so@meta.data %>%
+  ggplot(aes(nFeature_RNA, orig.ident, fill = orig.ident )) +
+  geom_density_ridges(alpha = 0.5) +
+  theme_ridges()
+```
+
+We can see that the data looks pretty "clean" - most cells have low mitochondrial content - but again we see how PBMC_4 is a bit different than the other samples. 
+
+Based on these distributions a reasonable starting point might be to simply exclude anything with percent.mt > 10, which is in the range of commonly used hard cutoffs. 
+However, it might be a good idea to be more liberal at first. This way we can hold on to more of the PBMC_4 cells between 10-15% and assess how they cluster with other cells.
+
+### Sequencing saturation
+
+It is also helpful to examine the correlation of the QC metrics.
+
+Here we compare counts (nCount_RNA) to genes (nFeature_RNA) in each sample, which is useful to asses our sequencing depth.
+
+Each dot is a cell in our data, and we see that there is a postive correlation between counts and genes.
+ie. more counts (UMIs) ~ more genes detected. 
+
+```{r}
+so@meta.data %>%
+  ggplot(aes(nCount_RNA, nFeature_RNA)) +
+  geom_point(alpha = 0.5) +
+  facet_wrap(~orig.ident, scales = 'free_y')
+```
+
+Notice these have an approximate logarithmic shape - they start to flatten out at higher counts - which is an indication that some cells are approaching sequencing saturation.
+But most of the cells look like there could be meaningful gains in gene detection with greater sequencing.
+
+These data were sequenced at a depth of 1,079,471,941 reads, with ~50k reads per cell on average.
+https://cf.10xgenomics.com/samples/cell-exp/9.0.0/20k_Human_Donor1-4_PBMC_3p_gem-x_multiplex_5k_Human_Donor1_PBMC_3p_gem-x/20k_Human_Donor1-4_PBMC_3p_gem-x_multiplex_5k_Human_Donor1_PBMC_3p_gem-x_web_summary.html
+
+### Counts and mitochondrial percent
+
+Another helpful comparison is to look at how counts relate to mitochondrial percent.
+
+We assume that dead cells will have both low total counts (UMIs) and high mitochondrial percentage.
+
+```{r}
+so@meta.data %>%
+  ggplot(aes(percent.mt, nCount_RNA, color = ifelse(nCount_RNA >= 1000, T, F))) +
+  geom_point(alpha = 1) +
+  facet_wrap(~orig.ident, scales = 'free_y') +
+  geom_vline(xintercept = 10)
+```
+
+We've labeled the 10% point on the x-axis which is in the range of commonly used thresholds. 
+And colored points by greater than or less than 1000 counts. (an arbitrary low number) 
+
+We can see that cells with higher mitochondrial percent do tend to have low counts. But that there are also cells with elevated mitochondrial gene expression and ~10k counts. 
+These could be cells with higher metabolic activity that we may want to keep. 
+
+It is interesting that these cells are mostly found in PBMC_4. Are there more dying cells in this sample because of some technical reason? Or are these good cells that are just undersequenced?
+
+## Doublets
+
+Besides removing potential dead or empty cells, limiting the number of doublets is a key QC step. 
+
+The simple approach is to set an arbitrary upper limit of detected genes and remove all cells above that point. 
+Again the assumption is that high feature/gene counts indicate doublets.
+
+Let's look at the distribution of Features in our samples...
+```{r}
+so@meta.data %>%
+  ggplot(aes(nFeature_RNA, orig.ident, fill = orig.ident )) +
+  geom_density_ridges(alpha = 0.5) +
+  theme_ridges() 
+```
+
+Most of our cells have around 3,000 features detected. This is in the normal range for 10x chromium. 
+
+Some tutorials suggest an upper limit of 2,500 features per cell. But this is obviously wrong for our data. 
+*it might have been more appropriate for earlier 10x chemistries with lower sensitivity* 
+
+Based purely on the distributions we could maybe say we want to drop anything above 6000, but we're just guessing.
+
+### `scDblFinder`
+
+The `scDblFinder` package provides a number of computational methods for identifying likely doublets.
+https://bioconductor.org/packages/release/bioc/vignettes/scDblFinder/inst/doc/introduction.html
+
+
+```{r}
+
+```
+
+
+## Filtering
+
+### Arbitrary cutoffs
+
+Here is an example of how to filter with arbitrary cutoffs. 
+
+```{r}
+# set some cut offs
+minUMI <- 500
+maxMito <- 15
+minGene <- 200
+maxGene <- 6000
+```
+
+And then annotate cells in the data...
+
+```{r}
+# add the annotation
+so@meta.data %<>% # this is a special pipe operator that sends the output back to the input object
+  dplyr::mutate(filter = ifelse(nFeature_RNA < minGene | nFeature_RNA > maxGene | nCount_RNA < minUMI | percent.mt > maxMito, T, F))
+
+
+# and then plot with cells to filtere labelled 
+so@meta.data %>%
+  tidyr::pivot_longer(cols = c('nCount_RNA','nFeature_RNA','percent.mt')) %>% # this pivot will take our three metric columns and combine them into a single column 'name'
+  ggplot(aes(orig.ident, value)) +
+  geom_violin() + 
+  geom_point(aes(color = filter), 
+             position = position_jitter(width = 0.1), 
+             size = 0.5, alpha = 0.2) +
+  scale_color_manual(values = c('black','red')) +
+  facet_wrap(~name, scales = 'free')  
+```
+
+Looking at the number of cells being filtered out we can see that this is a very limited filtering. 
+We are only dropping ~4-6% of cells. 
+
+```{r}
+so@meta.data %>%
+  dplyr::group_by(orig.ident, filter) %>%
+  dplyr::count() %>%
+  dplyr::group_by(orig.ident) %>%
+  dplyr::mutate(fract = round(n/sum(n)*100, 1))
+
+```
+
+
+### Data driven with `miQC`
+
+Instead of arbitrary cutoffs we can computationally estimate our noise population with the package `miQC`. 
+https://www.bioconductor.org/packages/devel/bioc//vignettes/miQC/inst/doc/miQC.html
+
+Briefly, `miQC` fits a model (two-distribution mixture model) to the data to distinguish the low-quality noise population from the high-quality cell population.
+The model is based on percentage of mitochondrial counts and features detected.
+
+Seurat has a wrapper function `runMiQC()` that takes a seurat object as input and returns the annotated object.
+
+```{r}
+library(miQC)
+so <- SeuratWrappers::RunMiQC(so, percent.mt = 'percent.mt', posterior.cutoff = 0.75)
+so@meta.data
+```
+
+Visualize the miQC filtering...
+
+```{r}
+so@meta.data
+# the miqc annotation is assigned to a variable called "miQC.keep"
+so@meta.data %>%
+  ggplot(aes(nFeature_RNA, percent.mt, color = miQC.probability)) +
+  geom_point(alpha = 0.5) +
+  scale_color_gradient(low = 'grey40',high ='red') +
+  facet_wrap(~orig.ident)
+```
+
+The default setting for `miQC` is to filter anything with a probability (of being noise) greater than 0.75.
+
+*note that `miQC` does not try to do any doublet/multiplet filtering only low-quality cells, so cells with high feature counts aren't marked.*
+
+```{r}
+
+so@meta.data %>%
+  ggplot(aes(nFeature_RNA, percent.mt, color = filter)) +
+  geom_point(alpha = 0.5) +
+  scale_color_manual(values = c('black','red')) +
+  facet_wrap(~orig.ident)
+
+```
+
+Like we see in the plots above, we're filtering out at a lower percent mt ~10%, and thus removing a larger number of the PBMC_4 sample. 
+
+```{r}
+so@meta.data %>%
+  dplyr::group_by(orig.ident, miQC.keep) %>%
+  dplyr::count() %>%
+  dplyr::group_by(orig.ident) %>%
+  dplyr::mutate(fract = round(n/sum(n)*100, 1))
+```
+
+Again, exactly how we choose to filter - data driven with something like `miQC` or arbitrarily with manual thresholds - involves a lot of guess work about the data.
+
+The best approach is probably to start with a small ammount of filtering, keeping a large number of cells, and to then after evaluating cell clustering, markers, and cell type annotation to revisit filtering. 
+Once we have a sense of how clusters and cell types correlate with our QC metrics we may be able to more accurately identify low quality cells. 
+
+## Subsetting
+
+Once we've decided on which cells to filter we next have to remove them from the data. 
+
+We can do this with the `subset()` function.
+
+```{r}
+
+Seurat::subset(so, )
+```
+
