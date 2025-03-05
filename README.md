@@ -15,7 +15,7 @@ There are 8 sections in this course and each has it's own R notebook that can ei
 02 - [scRNA-seq methods and data structures](02-Data_structures/README.md)
 - A brief review of scRNA-seq technologies (10x Genomics Chromium, Parse Biosciences, Complete Genomics Stereo-seq), and their data outputs. We will go over what some of these data look like and how they are organized. 
   
-03 - Quality control
+03 - [Quality control and cell filtering](03-Quality_control/README.md)
 - We will go through best practices for assessing the quality of a scRNA dataset and methods for filtering potentially low-quality cells. 
 
 04 - Normalization and sample integration
