@@ -6,6 +6,7 @@ library(Seurat)
 library(SeuratWrappers)
 library(magrittr)
 library(ggplot2)
+set.seed(123) # we set a seed to control random number generation
 
 load('../so.RData')
 ```
@@ -152,7 +153,14 @@ It is interesting that these cells are mostly found in PBMC_4. Are there more dy
 
 Besides removing potential dead or empty cells, limiting the number of doublets is a key QC step. 
 
-The simple approach is to set an arbitrary upper limit of detected genes and remove all cells above that point. 
+There are two types of possible doublets.
+- homotypic -- two of the same cell type 
+- heterotypic -- two cells of different types
+
+Homotypic doublets are very difficult to identify, and may not be as detrimental to the data. maybe.
+Heterotypic doublets are potentially more confounding because they create artifactual intermediate populations, negatively impacting clustering. 
+
+The simple approach to remove doublets is to set an arbitrary upper limit of detected genes and remove all cells above that point. 
 Again the assumption is that high feature/gene counts indicate doublets.
 
 Let's look at the distribution of Features in our samples...
@@ -170,14 +178,65 @@ Some tutorials suggest an upper limit of 2,500 features per cell. But this is ob
 
 Based purely on the distributions we could maybe say we want to drop anything above 6000, but we're just guessing.
 
-### `scDblFinder`
+### Data driven doublet detection
 
-The `scDblFinder` package provides a number of computational methods for identifying likely doublets.
+The `scDblFinder` package provides computational methods for identifying likely doublets.
 https://bioconductor.org/packages/release/bioc/vignettes/scDblFinder/inst/doc/introduction.html
 
+Briefly, `scDblFinder` works by...
+- creating artificial doublets by combining random real cells
+- generate a k-Nearest Neighbors (kNN) network 
+- measure the proportion of doublets in the same "neighborhood" for each cell
+- train a classifier on the kNN measurements 
 
 ```{r}
+library(scDblFinder)
 
+# `scDblFinder` takes a different object class than seurat -- a singleCellExperiment class
+# so we convert our seurat object 
+sce <- so %>% 
+  JoinLayers() %>% # separate samples as layers aren't supported in SCE so we have to join them
+  Seurat::as.SingleCellExperiment()
+
+# run scDblFinder
+# the default behavior is to generate doublets from random cells, but we can also use clusters (if they are very distinct)
+# a column specifying sample names can be passed to 'samples', our data is multiplexed and thus should be treated as 1 batch or "sample" in this case
+sce <- scDblFinder(sce, clusters = F, samples = NULL)
+
+sce@colData %>%
+  data.frame()
+```
+
+
+Let's join this output back into our seurat object...
+
+```{r}
+so <- Seurat::AddMetaData(so, sce@colData[,c('scDblFinder.class','scDblFinder.score')])
+```
+
+```{r}
+so@meta.data %>%
+  dplyr::arrange(scDblFinder.class) %>%
+  ggplot(aes(nFeature_RNA, nCount_RNA, color = scDblFinder.class)) +
+  geom_point() +
+  scale_color_manual(values = c('black','red')) +
+  facet_wrap(~orig.ident)
+
+```
+
+We can clearly see how this is a more nuanced filtering of doublets than just using higher feature counts.
+It's true that the detected doublets tend to have higher feature counts, but there are many cells with 
+high features that aren't classified as doublets.
+
+```{r}
+so@meta.data %>%
+  dplyr::group_by(orig.ident, scDblFinder.class) %>%
+  dplyr::count()
+
+so@meta.data %>%
+  dplyr::mutate(manual_dbl = ifelse(nFeature_RNA >= 5000, T, F)) %>%
+  dplyr::group_by(orig.ident, manual_dbl) %>%
+  dplyr::count()
 ```
 
 
@@ -192,7 +251,7 @@ Here is an example of how to filter with arbitrary cutoffs.
 minUMI <- 500
 maxMito <- 15
 minGene <- 200
-maxGene <- 6000
+maxGene <- 5000
 ```
 
 And then annotate cells in the data...
@@ -282,7 +341,7 @@ so@meta.data %>%
 
 Again, exactly how we choose to filter - data driven with something like `miQC` or arbitrarily with manual thresholds - involves a lot of guess work about the data.
 
-The best approach is probably to start with a small ammount of filtering, keeping a large number of cells, and to then after evaluating cell clustering, markers, and cell type annotation to revisit filtering. 
+The best approach is probably to start with a small amount of filtering, keeping a large number of cells, and to then after evaluating cell clustering, markers, and cell type annotation to revisit filtering. 
 Once we have a sense of how clusters and cell types correlate with our QC metrics we may be able to more accurately identify low quality cells. 
 
 ## Subsetting
@@ -291,8 +350,24 @@ Once we've decided on which cells to filter we next have to remove them from the
 
 We can do this with the `subset()` function.
 
-```{r}
+For now we'll use manual thresholds and keep a large number of cells, that way we can examine how some of our data driven annotations map to clusters later.
 
-Seurat::subset(so, )
+```{r}
+so.filtered <- subset(so, subset = filter == F)
+
+so.filtered@meta.data %>%
+  tidyr::pivot_longer(cols = c('nCount_RNA','nFeature_RNA','percent.mt')) %>% # this pivot will take our three metric columns and combine them into a single column 'name'
+  ggplot(aes(orig.ident, value)) +
+  geom_violin() + 
+  geom_point(position = position_jitter(width = 0.1), 
+             size = 0.5, alpha = 0.1) +
+  facet_wrap(~name, scales = 'free')
+```
+## Save
+
+```{r}
+# RData files can store multiple R objects
+# we can overwrite our so.RData file with the original unfiltered data and the filtered object
+#save(so, so.filtered, file = 'so.RData')
 ```
 
