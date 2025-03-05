@@ -211,7 +211,11 @@ sce@colData %>%
 Let's join this output back into our seurat object...
 
 ```{r}
-so <- Seurat::AddMetaData(so, sce@colData[,c('scDblFinder.class','scDblFinder.score')])
+# make the scdblfinder results into a dataframe
+sce.df <- sce@colData %>% data.frame()
+
+# and add to our seurat metadata
+so <- Seurat::AddMetaData(so, sce.df[,c('scDblFinder.class','scDblFinder.score')])
 ```
 
 ```{r}
