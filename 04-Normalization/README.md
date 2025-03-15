@@ -26,7 +26,7 @@ ie. highly variable genes should reflect differences in cell type
 Divide the counts for each gene in each cell by a cell-specific scaling factor aka "size factor".
 In other words, a single value (size factor) can represent the technical "bias" in a cell. Thus dividing the counts for each gene by this bias should remove it. 
 
-<img src="https://github.com/mniederhuber/hsl-scRNA/blob/main/images/scalingFactor.jpg">
+<img src="https://github.com/mniederhuber/hsl-scRNA/images/scalingFactor.jpg">
 
 
 # scTransform
