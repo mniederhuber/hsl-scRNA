@@ -31,7 +31,6 @@ The basic approach is to calculate a "size-factor" for each cell that reflects c
 
 This usually involves dividing gene counts by total counts in each cell (x some additional scaling factor). This method therefore accounts for differences in sequences depth, and allows us to call differential genes regardless of library size.
 
-
 <img src="https://github.com/mniederhuber/hsl-scRNA/blob/04-Normalization/images/scalingFactor.jpg" width = "50%">
 
 Here's a rough example:
@@ -42,9 +41,7 @@ Here's a rough example:
 
 But this depends on the assumption that all cells have roughly the same amount of RNA, because differences in total counts (UMIs) between cells should only reflect technical differences from library prep, sequencing depth, etc. 
 
-This assumption falls apart when there's globally an increase or decrease in transcription, as sequencing depth is no longer a technicality but reflective of some underlying biology. This is rare, but in this case something like ERCC spike-ins would be needed instead.
-
-If some cells globally upregulate or downregulate their genome, then the total number of counts (UMI) no longer corresponds to sequencing depth alone. 
+This assumption falls apart when there's globally an increase or decrease in transcription, differences in total UMI counts are no longer a technicality but reflective of some underlying biology. This is rare, but in this case something like ERCC spike-ins would be needed instead.
 
 ### Size-factor from pools
 
@@ -62,24 +59,19 @@ An alternative to size-factor normalization is to model the gene counts using a 
 
 # scTransform
 
-`scTransform` is an R package from the Satija lab (developers of Seurat) that uses a Negative Binomial Distribution to model gene counts across single cells. 
+While size-factor normalization does a decent job of controlling for differences in library size between cells, [Hafemeister and Satija, 2019](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1874-1) showed that highly expressed genes are not effectively normalized and exhibit distinct patterns.  
+
+An alternative to size-factor normalization is to model the gene counts using a probability distribution. 
+
+This gives us a per gene measure of average expression and variance, and thus avoids making assumptions across all cells / samples. 
+
+The `sctransform` package from the Satija lab uses a **Regularized Negative Binomial Distribution** to model gene-wise counts across all cells. 
+
+This approach may provide...
+- better control of library size differences by modeling the relation of gene counts to total counts *per cell*
+- improved handling of highly expressed and highly variable genes
+- improved downstream dimensionality reduction and clustering 
 
 >[!QUOTE]
 >We propose that the Pearson residuals from “regularized negative binomial regression,” where cellular sequencing depth is utilized as a covariate in a generalized linear model, successfully remove the influence of technical characteristics from downstream analyses while preserving biological heterogeneity. 
 >https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1874-1
-
-negative binomial regression
-
-pearson risiduals
-(obs - exp) / sqrt(variance) = residual
-
-Genes with different abundances in the cell appear to respond to size-factor normalization and scaling differently. Low and medium abundancne genes are effectively normalized, but high abundance genes still show sequencing depth correlations. 
-"introduce distinct effects on different gene sets, given their average abundance."
-
-# variable genes
-
-
-
-# Resources
-
-https://ouyanglab.com/singlecell/basic.html#data-normalization
