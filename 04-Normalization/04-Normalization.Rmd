@@ -1,0 +1,260 @@
+
+```{r}
+.libPaths("/nas/longleaf/rhel8/apps/r/4.4.0/lib64/R/library")
+library(magrittr)
+library(ggplot2)
+library(Seurat)
+load('../so.RData')
+```
+
+# Size-factor workflow
+
+The standard size-factor workflow in Seurat involves two-steps. 
+A log-normalization step and then a scaling step. 
+
+
+We first use `NormalizeData` to calculate size-factors and normalize with a log transformation. 
+
+From Seurat docs:
+- “LogNormalize”: Feature counts for each cell are divided by the total counts for that cell and multiplied by the scale.factor. This is then natural-log transformed using log1p
+
+The `scale.factor` is somewhat arbitrary number meant to bring normalized counts into the same order of magnitude as total counts/UMI per cell. Based on what we saw in our QC preprocessing our data were ~12k UMI per cell, so 10k would be an appropriate scale.factor. 
+
+Notice we now have 4 more layers in our object after normalizing, these `data` layers have the normalized counts. 
+
+```{r}
+so.filtered <- NormalizeData(so.filtered, 
+                             normalization.method = "LogNormalize", 
+                             scale.factor = 10000) # the default scale.factor is 10000
+
+Layers(so.filtered)
+```
+
+### Variable Features
+
+When we run `FindVariableFeatures` Seurat identifies genes with the greatest variability across cells. 
+
+In the case of a merged object with multiple layers (different samples) variabel features are first identified in each layer separately. Then a shared set is identified between layers.
+
+I cannot find clear documentation on this, but I believe the shared variable features are ranked by average variance across layers. 
+
+https://github.com/satijalab/seurat/issues/8325
+
+
+```{r}
+so.filtered <- FindVariableFeatures(so.filtered,
+                                    selection.method = "vst", 
+                                    nfeatures = 2000)
+VariableFeatures(so.filtered)
+top10 <- head(VariableFeatures(so.filtered), 10)
+
+plot1 <- VariableFeaturePlot(so.filtered)
+LabelPoints(plot = plot1, points = top10, repel = TRUE, xnudge = 0, ynudge = 0)
+```
+
+### Scaling
+
+After normalizing it's standard to apply a linear transformation to scale the data.
+
+This...
+- shifts the counts for each gene so the mean counts of all genes = 0
+- scales the counts so that that variance of for each gene across all cells = 1.
+
+The default is to scale with only variable features, but we can specify all genes if we want.  
+
+When we scale the data we also have the option to "regress out" variables with the `vars.to.regress` argument.
+
+"Regressing out" means removing the effect a variable has on gene expression. To do this Seurat fits a linear regression model to the data with the specified variable as a covariate. For each gene the effect of this covariate is subtracted to remove its effect.
+
+It is common practice to "regress out" the effect of mitochondrial content, this is to prevent mitochondrial content from driving downstream analysis like clustering. **NOTE** that this assumes we don't care about the variability introduced by this variable, which may not be true for certain experiments / datasets.
+
+After scaling the scaled data is added to a new slot called `scale.data` .
+
+```{r}
+so.filtered <- ScaleData(so.filtered, 
+#          features = rownames(so.filtered),  # to scale using all genes, but runs VERY SLOW with regression. 
+          vars.to.regress = 'percent.mt')
+```
+
+### Checking normalization
+
+Let's take a look at how the normalization changed our counts...
+
+Using GAPDH as an example, we see that before normalization the distribution of counts has a long tail. 
+
+We also see that there's a strong positive correlation between total UMI and GAPDH counts 
+
+As expected normalization gives us a more normal distribution and less of a correlation with sequencing depth. 
+
+```{r}
+so.filtered$'gapdh_raw' <- so.filtered[['RNA']]$counts.PBMC_1['GAPDH',] 
+so.filtered$'gapdh_norm' <- so.filtered[['RNA']]$data.PBMC_1['GAPDH',] 
+
+umi_counts <- so.filtered[['RNA']]$counts.PBMC_1
+cell_depth <- colSums(umi_counts)
+
+# Convert to a tidy data format (for ggplot)
+df <- data.frame(
+  gene = rep(rownames(umi_counts), ncol(umi_counts)),  # Gene names repeated for each cell
+  counts = as.vector(umi_counts),                      # Observed UMI counts
+  depth = rep(cell_depth, each = nrow(umi_counts))     # Sequencing depth per cell
+)
+
+# Remove zero-count genes to avoid log issues
+df <- df %>% dplyr::filter(counts > 0)
+
+# Plot the observed counts vs. cell sequencing depth
+df %>%
+  .[sample(1000),] %>%
+  ggplot(aes(x = depth, y = counts)) +
+  geom_point()
+ # geom_smooth(method = "loess", span = 0.3, color = "blue", alpha = 0.6) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Total UMI Count per Cell (Sequencing Depth)", 
+       y = "Observed UMI Count",
+       title = "Observed UMI Counts vs. Cell Sequencing Depth") +
+  theme_minimal()
+
+
+rowSums(so.filtered[['RNA']]$counts.PBMC_1 )
+
+VlnPlot(so.filtered, features = 'GAPDH', slot = 'counts', pt.size = 0.2)
+
+so.filtered@meta.data %>%
+  ggplot(aes(gapdh_raw)) +
+  geom_histogram(bins = 50)
+
+so.filtered@meta.data %>%
+  ggplot(aes(nCount_RNA, gapdh_raw)) +
+  geom_point() +
+  geom_density_2d()
+
+VlnPlot(so.filtered, features = 'GAPDH', slot = 'data', pt.size = 0.2)
+
+so.filtered@meta.data %>%
+  ggplot(aes(gapdh_norm)) +
+  geom_histogram(bins = 50)
+
+so.filtered@meta.data %>%
+  ggplot(aes(nCount_RNA, gapdh_norm)) +
+  geom_point() 
+
+```
+
+
+## scTransform
+
+While size-factor normalization does a decent job of controlling for differences in library size between cells, [Hafemeister and Satija, 2019](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1874-1) showed that highly expressed genes are not effectively normalized and exhibit distinct patterns.  
+
+An alternative to size-factor normalization is to model the gene counts using a probability distribution. This gives us a per gene measure of average expression and variance, and thus avoids making assumptions across all cells / samples. 
+
+The `sctransform` package from the Satija lab 
+
+```{r}
+# ~5m to run
+so.filtered <- so.filtered %>%
+  SCTransform(vst.flavor = 'v2', verbose = T, return.only.var.genes = F)
+```
+
+```{r}
+raw_counts <- so.filtered[['RNA']]$counts.PBMC_1 %>%
+  .[rownames(so.filtered[['SCT']]@SCTModel.list$PBMC_1@feature.attributes),]
+
+gene_means <- rowMeans(raw_counts)  
+gene_vars <- apply(raw_counts, 1, function(x) { mean(x^2) - mean(x)^2 })  
+df <- data.frame(mean = gene_means, 
+                 vars = gene_vars)
+
+df %>%
+  ggplot(aes(log(mean), log(vars))) +
+  geom_point(alpha = 0.2) 
+
+df %>%
+  ggplot(aes(log(mean), log(vars))) +
+  #geom_point(alpha = 0.2) +
+  geom_hex(bins = 50 ) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  scale_fill_viridis_c() 
+```
+
+
+```{r}
+#####
+# approximation of the negative binomial
+model<- lm(vars ~  1* mean + I(mean^2) + 0, data =df )
+summary(model)
+
+predicted_df<- data.frame(mean = df$mean,
+                          var_predict = df$mean + model$coefficients[[1]] * (df$mean)^2 )
+
+df %>%
+  ggplot(aes(log10(mean), log10(vars))) +
+#  geom_point(alpha = 0.2) +
+  geom_hex(bins = 50 ) +
+  geom_line(color = "red", 
+            data = predicted_df, 
+            aes(x = log10(gene_means), y =log10(var_predict))) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  scale_fill_viridis_c() 
+
+```
+
+```{r}
+# Assuming `so.filtered` is your Seurat object with sctransform applied
+# Extract normalized counts (Pearson residuals)
+normalized_counts <- so.filtered[["SCT"]]@scale.data  # These are the variance-stabilized values
+
+
+theta <- so.filtered[["SCT"]]@SCTModel.list$PBMC_1@feature.attributes$theta
+mu <- so.filtered[["SCT"]]@SCTModel.list$PBMC_1@cell.attributes$umi
+
+# Convert mu estimates back to the original scale (exponentiate)
+#mu <- exp(mu)
+so.filtered[['SCT']]@SCTModel.list
+# Visualize estimated mean vs. variance
+gene_means <- rowMeans(normalized_counts)  # Mean expression
+gene_vars <- apply(normalized_counts, 1, var)  # Variance per gene
+
+ggplot(data.frame(mean = gene_means, variance = gene_vars), aes(x = mean, y = variance)) +
+  geom_point(alpha = 0.5, color = "blue") +
+  scale_x_log10() + scale_y_log10() +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed", size = 1.2) +
+  ggtitle("Mean-Variance Relationship in sctransform-Normalized Data") +
+  xlab("Mean Expression (log scale)") +
+  ylab("Variance (log scale)") +
+  theme_minimal()
+```
+
+
+```{r}
+# Set parameters for the simulation
+n_genes <- 1000   # Number of genes
+n_cells <- 200    # Number of cells
+
+# Simulate mean expression levels for each gene (randomly chosen)
+gene_means <- runif(n_genes, min = 0.1, max = 10)  # Mean expression per gene
+
+# empty matrix of shape ngene x ncell
+sim_poisson_counts <- matrix(0, nrow = n_genes, ncol = n_cells)
+
+# loop ngenes and sample counts from a poisson distribution around the gene mean calc above
+for (i in 1:n_genes) {
+  sim_poisson_counts[i, ] <- rpois(n_cells, lambda = gene_means[i])  
+}
+
+# mean and variance per gene
+gene_mean <- rowMeans(sim_poisson_counts)
+gene_variance <- apply(sim_poisson_counts, 1, var)
+
+# Plot the mean-variance relationship
+data.frame(mean = gene_mean, 
+           variance = gene_variance) %>%
+  ggplot(aes(mean, variance)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed", size = 1) +
+  scale_x_log10() +
+  scale_y_log10() 
+  
+```
+

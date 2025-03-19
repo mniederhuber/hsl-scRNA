@@ -372,6 +372,6 @@ so.filtered@meta.data %>%
 ```{r}
 # RData files can store multiple R objects
 # we can overwrite our so.RData file with the original unfiltered data and the filtered object
-#save(so, so.filtered, file = 'so.RData')
+save(so, so.filtered, file = 'so.RData')
 ```
 
