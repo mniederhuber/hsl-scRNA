@@ -18,10 +18,10 @@ There are 8 sections in this course and each has it's own R notebook that can ei
 03 - [Quality control and cell filtering](03-Quality_control/README.md)
 - We will go through best practices for assessing the quality of a scRNA dataset and methods for filtering potentially low-quality cells. 
 
-04 - [Normalization and sample integration](04-Normalization/README.md)
+04 - [Normalization](04-Normalization/README.md)
 - A description of different normalization methods and how to perform them with Seurat. We will also introduce the idea of sample integration (aka batch correction) and how to perform some of more common integration methods.
 
-05 - Dimensionality reduction
+05 - [Dimensionality Reduction](05-Dimensionality_Reduction/README.md)
 - We will cover what dimensionality reduction is, types of reductions (PCA, TSNE, UMAP), how to perform them in Seurat, and some ways to assess reductions.  
 
 06 - Clustering
