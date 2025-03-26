@@ -97,7 +97,7 @@ After scaling the scaled data is added to a new slot called `scale.data` .
 ```{r}
 so.filtered <- ScaleData(so.filtered, 
 #          features = rownames(so.filtered),  # to scale using all genes 
-#          vars.to.regress = 'percent.mt' # to regress out mito percent, but slow
+          vars.to.regress = 'percent.mt' # to regress out mito percent, but slow
 )
 ```
 

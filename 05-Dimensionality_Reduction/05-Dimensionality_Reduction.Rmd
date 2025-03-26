@@ -1,0 +1,362 @@
+```{r}
+.libPaths("/nas/longleaf/rhel8/apps/r/4.4.0/lib64/R/library")
+library(Seurat)
+library(ggplot2)
+library(magrittr)
+load('../so.RData')
+```
+
+# Recap
+
+So far we have:
+- loaded our 4 sample data
+- visualized QC metrics and applied a loose filtering to remove dead cells
+- Normalized and scaled the data with 2 different methods -- size-factor + log scaling, and scTransform 
+  - and we've "regressed out" percent mitochondrial during this process
+- Identified highly variable features 
+  - 2,000 variable features after size-factor normalization
+  - 3,000 variable features found by scTransform (default number)
+  
+We have 2 assays present in the object
+- 'RNA' which has our raw `counts` layers, size-factor normalized log-transformed `data` layers, and the centered and scaled `scale.data` layers
+- 'SCT' which has the results of `scTransform()`, and umi-normalized `counts`, log-transform of the umi-normalized counts in `data`, and the z-scaled pearson residuals in `scale.data` (for just the 3,000 most variable features)
+
+# Dimensionality reduction
+
+After QC filtering and normalization the next step is normally to perform **dimensionality reduction** using `PCA` and `UMAP` most commonly. 
+
+**WHY?** What does it mean to "reduced the dimensions" of our data and why is it important?
+
+There are 2 reasons we do dimensionality reduction:
+1. identify the sources of variance in the data
+2. visualization 
+
+## High-dimensional data
+
+Why do we say that single cell data is "high-dimensional"? 
+
+Because for each cell in our sample/dataset there are counts for **thousands of genes**. 
+
+In contrast, a "low-dimensional" dataset could be many cells with only 2 or 3 genes profiled in each cell.  
+
+Here is a simple example of 6 cells with 2 genes profiled. 
+
+```{r}
+
+low <- data.frame(cells = as.character(c(1,2,3,4,5,6)),
+                gene1 = c(8,9,9,1,2,2),
+                gene2 = c(7,8,7,4,5,4))
+
+ggplot(low, aes(gene1, gene2, color = cells)) +
+  geom_point(size = 4) +
+  xlim(c(0,10)) +
+  ylim(c(0,10))
+  
+```
+
+We have 2 dimensions: `gene1` and `gene2` and it is easy to visualize groupings and calculate how these genes drive differences between the cells.
+
+Without even doing any may it seems pretty obvious that gene1 is the primary source of variation between these 6 cells.
+
+We could even easily handle 3-dimensions if we wanted. 
+
+But in our single-cell data we have thousands of genes profiled in each cell, which we can't visualize. 
+
+This is **high-dimensional** data, and it makes it a lot harder to figure out what makes cells different.
+
+We use methods of dimensionality reduction to take this high-dimensional data and project it into 2-dimensional space, where the axes are no longer single genes but mathematical constructions that capture the greatest variance in the data. 
+
+# Principle Component Analysis
+
+PCA is a **linear** dimensionality reduction. It is widely used in genomics as well as machine learning. 
+
+PCA works by taking high-dimensional data and finding vectors that capture the greatest variance - **principle components**.
+It allows us to plot the data in 2D and let's us see which genes are contributing the most to the different principle components.
+
+PCA needs data to be *centered* and *scaled* - meaning the average of the data must be 0 (centered) and the values must be on similar scales.
+This is why we have to normalize and scale before we get to this step.
+
+## low-dimensions
+
+Below I apply a z-normalization to our toy data to center and scale the data. Now everything is centered around 0. 
+
+```{r}
+g1.m <- mean(low$gene1)
+g1.sd <- sd(low$gene1)
+g2.m <- mean(low$gene2)
+g2.sd <- sd(low$gene2)
+
+low <- dplyr::mutate(low, 
+              z1 = (gene1 - g1.m)/g1.sd,
+              z2 = (gene2 - g2.m)/g2.sd)
+
+ggplot(low, aes(z1, z2, color = cells)) +
+  geom_point(size = 4) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0) +
+  theme_minimal()
+```
+
+In this highly-simplified example, PCA works by finding the "direction" or line that best fits these points.
+
+```{r}
+# Calculate the slope of the regression line
+model <- lm(z2 ~ z1, data = low)
+slope <- coef(model)[2]  # Get the slope coefficient
+
+ggplot(low, aes(z1, z2, color = cells)) +
+  geom_point(size = 4) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0) +
+  geom_abline(slope = slope, intercept = 0, color = 'red', linetype = 'dashed') +
+  annotate('text', label = 'PC1', x = 0.5, y = 0.6, color = 'red') +
+  geom_abline(slope = -1/slope, intercept = 0, color = 'blue', linetype = 'dashed') +
+  annotate('text', label = 'PC2', x = -0.5, y = 0.6, color = 'blue') +
+  theme_minimal() 
+```
+
+Each PC has a slope. In this case the slope relates to the expression of just 2 genes, gene1 and gene2.
+
+PC1 has a slope of **0.36** or 3.6 / 10. Which means that in PC1, gene1 contributes 10 parts for every 3.6 parts of gene2.  
+ie. PC1 is a "linear combination" of the variables gene1 and gene2. 
+
+This ratio of gene1 and gene2 contributions is related to the principle component **loadings**, which are scaled values that describe how much each variable contributes to a principle component.
+
+## higher dimensions
+
+For real-world single cell data, PCA calcualtes a covariance matrix (gene x gene) to measure how each gene's expression varies with other genes across the dataset. 
+And then finds linear combinations of genes that explain the most variance. 
+
+eg. PC1 = -0.5(geneA) + 1.2(geneB) + 0.2(geneC) + -0.1(geneD)... 
+
+- PC1 will be the vector that captures the most variance. 
+- PC2 the second most.
+- PC3 the third
+- etc.
+
+## Running PCA in Seurat
+
+While the math is complex, it's simple to actually run PCA with Seurat.
+
+```{r}
+
+so.filtered <- Seurat::RunPCA(so.filtered, 
+                              reduction_name = 'pca', #default is pca but we could customize if needed
+                              assay = 'SCT', # we'll use our SCT normalized data, and thus our 3,000 variable features
+                              npcs = 50,  # this is the default number of PCs to calculate
+                              ) 
+
+```
+
+After running `runPCA()` the reduction is stored in `@reductions` as `PCA` and contains several pieces of potentially useful data.
+
+useful contents of `@reductions$PCA`
+- list of principle components: `PC1,PC2,...`
+- `cell.embeddings`: positions for each cell along all computed PCs, used for plotting
+- `feature.loadings`: gene loadings for each PC - positive or negative contributions of each gene to the PC
+
+## Visualizing PCA
+
+First things first let's just look at PC1 and PC2. We can plot reductions with the Seurat `DimPlot()` function.
+
+```{r}
+Seurat::DimPlot(so.filtered) # will default to plotting pca reduction and just showing pc1 and pc2.
+# and will default to coloring by sample id (orig.ident)
+
+# coloring can be changed with `group.by`:
+Seurat::DimPlot(so.filtered, group.by = 'scDblFinder.class')
+```
+
+Or if we want to have more control we can extract the cell embeddings and append them to our metadata, then use `ggplot`.
+
+```{r}
+pca.emb <- so.filtered@reductions$pca@cell.embeddings %>%
+  data.frame() %>%
+  dplyr::bind_cols(so.filtered@meta.data) 
+
+#NOTE the bind above works because the order of rows (cells) is the same between the metadata and the cell embeddings
+# you can verify with:
+all(rownames(pca.emb) == rownames(so.filtered@meta.data))
+
+pca.emb %>%
+#  .[sample(nrow(.)),] %>% # to shuffle our rows and prevent samples from overplotting too much
+  ggplot(aes(PC_1, PC_2, 
+             color = orig.ident)
+         ) +
+  geom_point(alpha = 0.5)
+```
+
+What about other PCs? 
+
+We can use the `GGally` package to make a pair-wise plot of the first 5 PCs.
+
+If you look at the PC_1 axis scale relative to the other PCs you can see how it captures the most variance.
+
+```{r}
+pcs <- c('PC_1','PC_2','PC_3','PC_4','PC_5')
+
+pca.emb %>%
+  .[sample(nrow(.)),] %>%
+  GGally::ggpairs(columns = pcs, progress = F, 
+                mapping = ggplot2::aes(color = orig.ident))
+```
+
+To further demonstrate that, look the pair-wise plot with the bottom 5 PCs.
+
+There's much less "structure" and the scale of variance is much lower. 
+
+These lower PCs are probably not capturing variations in the dataset that are super meaningful.
+
+```{r}
+
+lowpcs <- c('PC_46','PC_47','PC_48','PC_49','PC_50')
+pca.emb %>%
+  .[sample(nrow(.)),] %>%
+  GGally::ggpairs(columns = lowpcs, progress = F, 
+                mapping = ggplot2::aes(color = orig.ident))
+```
+
+## Picking PCs
+
+As we just demonstrated, not all PCs calculated are useful. Many will capture meaningless noise in the data. 
+
+So an important step is to determine which PCs to utilize for downstream steps (clustering). AKA define the dimensionality of our data.
+Roughly, we want the minimum number of PCs that still capture ~90% of variance in the data. But this is another area of analysis that is more art than science, and should be approached with the expectation of possibly iterating on different degrees of dimensionality. 
+
+A quick and simple approach is to use an **elbow plot** to look at the variance captured by each PC.
+
+The elbow plot shows the PCs ranked by their standard deviation, highest to lowest.
+It's called an "elbow plot" because we are looking for the "elbow" where the points level out. 
+
+It looks like the "elbow" in our data is maybe around 10 or 20. Generally, keeping between 10-40 PCs is adequate for most datasets.
+Even though later PCs are mostly "noise" they're contribution will be minor. 
+
+```{r}
+Seurat::ElbowPlot(so.filtered, ndims = 50)
+```
+
+There are a number of quantitative approaches for determining the number of PCs to keep. A description of some can be found here:
+- https://bioconductor.org/books/3.13/OSCA.advanced/dimensionality-reduction-redux.html#more-choices-for-the-number-of-pcs
+- https://satijalab.org/seurat/articles/pbmc3k_tutorial.html#determine-the-dimensionality-of-the-dataset
+
+For now we'll just use **30** as it looks like it good balance of strong and noisy PCs. 
+
+## Loadings
+
+It can also be useful to examine the PC loadings to get a sense of what genes might be contributing to the strongest PCs.
+
+We can use the `DimHeatmap()` function in Seurat to plot a heatmap of any number of PCs.
+
+These heatmaps show the top genes with the highest loadings and lowest loadings for each PC requested. 
+Columns are cells, and we can limit the plot to the top n cells (most extreme) to help with visualization.
+
+Notice how the "structure" of yellow and purple colored values are clearly separated between positive and negative loadings in the top few PCs, but that structure get's "messier" and less defined with lower PCs. This again shows how the top PCs are capturing the strongest sources of variation between cells. 
+
+Looking at the genes, we see several are associated with immune functions in the top positive loadings for the first several PCs. This is a good sign that our PCs are capturing relevant biology for our data. 
+
+If, for example, we saw PC1 was defined by many cell cycle genes - which might not be biologically relevant for our experiment - we may want further explore how cell cycle was impacting variation across cells and consider regressing out that effect. 
+
+```{r}
+Seurat::DimHeatmap(so.filtered, dims = 1:9, cells = 500, nfeatures = 10)
+Seurat::DimHeatmap(so.filtered, dims = 22:30, cells = 500, nfeatures = 10)
+
+```
+
+# UMAP
+
+Uniform Manifold Approximation and Projection is a **non-linear** dimensionality reduction that has become very popular (and ubiquitous) in single cell analysis.
+- "non-linear" -- meaning the algorithm will transform different parts of the data differently, it is not a single linear transformation across all cells
+
+
+It is primarily a tool for **visualization** of high-dimensional data and allows for exploring differences in cell gene expression in visually appealing 2D or 3D plots.
+
+UMAP works by determining similarities between cells in high-dimensional space, and then projecting cells into 2D such that those similarities are best preserved.
+This done by moving cells around in 2D space until they have relationships similar to what was found in high-dimensional space.
+
+UMAP was developed by [McInnes et al. 2018](https://arxiv.org/abs/1802.03426) and has largely replaced another common non-linear method TSNE (t-distributed Stochastic Neighbor Embedding). 
+
+UMAP improves on TSNE...
+- faster
+- preserves both local and global structure 
+
+What does that mean local vs global structure? Basically, if a projection method only preserves global structure then the distance between **groups** of points have meaning, but the distance between points within a group are largely meaningless. If a projection method retains local structure but not global structure the opposite is true. 
+
+UMAP is highly-sensitive and there are many hyper-parameters that have significant outputs on the resulting cell embeddings. Because of how UMAP (and TSNE) project data it can lead to significant distortions in the distances between cells, creating visual separations that may not reflect true heterogeneity. 
+
+ **This doesn't mean UMAPs aren't useful!** These projections hare powerful tools for data exploration. But it is important not to over-interpret them, or rely on them to make analytical conclusions.
+
+Some discusions on misuse and distortions in UMAPS:
+- https://prelights.biologists.com/highlights/a-novel-metric-reveals-previously-unrecognized-distortion-in-dimensionality-reduction-of-scrna-seq-data/
+- https://simplystatistics.org/posts/2024-12-23-biologists-stop-including-umap-plots-in-your-papers/
+- https://pmc.ncbi.nlm.nih.gov/articles/PMC10434946/
+
+
+## Running UMAP
+
+We can use UMAP in Seurat with the `RunUMAP()` function.
+
+By default `RunUMAP()` will use the PCs found by PCA. This is done to focus on the greatest sources of variability in the data. What that means is that the PCs are used to score similarities between cells and the do the projection, and not individual genes.
+
+We can run UMAP with specified features instead of the PCs if we want with the `features` argument, but the normal workflow is to use PCs. 
+
+This function has ~25 meaningful arguments that we can adjust! 
+
+Two that are important to play around with are `dims` which is the number of dimensions to use from the PCA. We'll use 30 since that's what we decided based on the elbow plot. 
+
+The other is `n.neighbors` which sets how many neighbors to use for local approximation. Commonly between 5-50. Lower means more local structure. Higher means more global structure.
+
+```{r}
+
+so.filtered <- Seurat::RunUMAP(so.filtered, 
+                assay = 'SCT', 
+                reduction = 'pca', # which reduction to get dimensions from
+                dims = 1:30,  # which dimensions to use
+                n.neighbors = 5) # how many neighbors to use for local approximation
+```
+
+After running UMAP we have a new `reduction` in our object. 
+
+```{r}
+so.filtered@reductions
+```
+
+We can reuse the `DimPlot()` function or again extract embeddings.
+
+```{r}
+Seurat::DimPlot(so.filtered, reduction = 'umap')
+```
+
+```{r}
+um <- so.filtered@reductions$umap@cell.embeddings %>%
+  dplyr::bind_cols(so.filtered@meta.data)
+
+um %>%
+  .[sample(nrow(.)),] %>%
+  ggplot(aes(umap_1, umap_2, color = orig.ident)) +
+  geom_point(alpha = 0.5)
+```
+## Feature Plots
+
+Even before we cluster and annotate our cells, these UMAPs can be useful to visualize patterns of gene expression.
+
+We can use the `FeaturePlot()` function to map normalized counts for different genes onto our UMAP.
+
+Let's look at some of the top PC loadings we found earlier and see how they map on the UMAP.
+
+We can see that there are pretty strong separations of cell groups correlating with differences in expression of these genes.
+
+```{r}
+Seurat::FeaturePlot(so.filtered, features = c('ZEB1', 'CAMK4', 'IGHM', 'LYZ'), order = T)
+```
+
+# Integration
+ 
+Looking at how our 4 samples group in our preliminary UMAPs we can see that there's a fair amount of sample-specific local grouping. This suggests it might be a good idea to **integrate** our 4 samples together. Which we will tackle in our next class!
+
+# Save
+```{r}
+#save(so.filtered, )
+```
+
+
+
