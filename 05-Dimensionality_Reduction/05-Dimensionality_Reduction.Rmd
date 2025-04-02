@@ -122,6 +122,8 @@ ie. PC1 is a "linear combination" of the variables gene1 and gene2.
 
 This ratio of gene1 and gene2 contributions is related to the principle component **loadings**, which are scaled values that describe how much each variable contributes to a principle component.
 
+pc1 = 0.9xgene1 + -0.2xgene2 etc.. 
+
 ## higher dimensions
 
 For real-world single cell data, PCA calcualtes a covariance matrix (gene x gene) to measure how each gene's expression varies with other genes across the dataset. 
@@ -149,6 +151,9 @@ so.filtered <- Seurat::RunPCA(so.filtered,
 ```
 
 After running `runPCA()` the reduction is stored in `@reductions` as `PCA` and contains several pieces of potentially useful data.
+```{r}
+so.filtered@reductions$pca
+```
 
 useful contents of `@reductions$PCA`
 - list of principle components: `PC1,PC2,...`
@@ -164,7 +169,7 @@ Seurat::DimPlot(so.filtered) # will default to plotting pca reduction and just s
 # and will default to coloring by sample id (orig.ident)
 
 # coloring can be changed with `group.by`:
-Seurat::DimPlot(so.filtered, group.by = 'scDblFinder.class')
+Seurat::DimPlot(so.filtered, group.by = 'scDblFinder.class', dims = c(49,50))
 ```
 
 Or if we want to have more control we can extract the cell embeddings and append them to our metadata, then use `ggplot`.
@@ -174,16 +179,19 @@ pca.emb <- so.filtered@reductions$pca@cell.embeddings %>%
   data.frame() %>%
   dplyr::bind_cols(so.filtered@meta.data) 
 
+pca.emb
 #NOTE the bind above works because the order of rows (cells) is the same between the metadata and the cell embeddings
 # you can verify with:
 all(rownames(pca.emb) == rownames(so.filtered@meta.data))
 
+pca.emb[]
 pca.emb %>%
-#  .[sample(nrow(.)),] %>% # to shuffle our rows and prevent samples from overplotting too much
+  .[sample(nrow(.)),] %>% # to shuffle our rows and prevent samples from overplotting too much
   ggplot(aes(PC_1, PC_2, 
              color = orig.ident)
          ) +
-  geom_point(alpha = 0.5)
+  geom_point(alpha = 0.5) +
+  facet_wrap(~orig.ident)
 ```
 
 What about other PCs? 
@@ -198,7 +206,7 @@ pcs <- c('PC_1','PC_2','PC_3','PC_4','PC_5')
 pca.emb %>%
   .[sample(nrow(.)),] %>%
   GGally::ggpairs(columns = pcs, progress = F, 
-                mapping = ggplot2::aes(color = orig.ident))
+                mapping = ggplot2::aes(color = orig.ident, alpha = 0.5))
 ```
 
 To further demonstrate that, look the pair-wise plot with the bottom 5 PCs.
@@ -232,7 +240,7 @@ It looks like the "elbow" in our data is maybe around 10 or 20. Generally, keepi
 Even though later PCs are mostly "noise" they're contribution will be minor. 
 
 ```{r}
-Seurat::ElbowPlot(so.filtered, ndims = 50)
+Seurat::ElbowPlot(so.filtered, ndims = 20)
 ```
 
 There are a number of quantitative approaches for determining the number of PCs to keep. A description of some can be found here:
@@ -311,7 +319,7 @@ so.filtered <- Seurat::RunUMAP(so.filtered,
                 assay = 'SCT', 
                 reduction = 'pca', # which reduction to get dimensions from
                 dims = 1:30,  # which dimensions to use
-                n.neighbors = 5) # how many neighbors to use for local approximation
+                n.neighbors = 50) # how many neighbors to use for local approximation
 ```
 
 After running UMAP we have a new `reduction` in our object. 
@@ -355,7 +363,8 @@ Looking at how our 4 samples group in our preliminary UMAPs we can see that ther
 
 # Save
 ```{r}
-#save(so.filtered, )
+#so.filtered
+save(so.filtered, file = '../so.RData')
 ```
 
 

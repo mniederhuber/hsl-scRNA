@@ -1,0 +1,318 @@
+```{r}
+.libPaths("/nas/longleaf/rhel8/apps/r/4.4.0/lib64/R/library")
+
+library(Seurat)
+library(SeuratWrappers)
+library(ggplot2)
+library(magrittr)
+load('../so.RData')
+```
+
+# Recap
+
+Last class we reviewed the why and how of dimensionality reduction. 
+
+So now we have identified principle components for our dataset and used UMAP to project our data into a visually interpretable 2D plot.  
+
+Before we dive into integration let's rerun UMAP with the default neighbors = 30. 
+
+```{r}
+so.filtered <- Seurat::RunUMAP(so.filtered, 
+                assay = 'SCT', 
+                reduction = 'pca', # which reduction to get dimensions from
+                dims = 1:30,  # which dimensions to use
+                n.neighbors = 30,
+                reduction.name = 'umap')
+```
+# Why integrate?
+
+Integration is a useful method to further remove technical variation or batch effects between samples.
+
+The easiest way to tell if our data might benefit from integration is to look at the UMAP (or PCA).
+
+We want to see if our 4 different samples form distinct groups in these dimensionality reductions.
+
+*NOTE* our example data are multiplexed patient samples. Meaning they were all run on the same 10x lane, so the primary  source of batch effect we're worried about is sample handling. We also expect that since these samples are biological replicates we will have the same cell types present in all 4. 
+
+Let's make a dataframe of our umap embeddings and plot the cells. 
+
+```{r}
+df <- so.filtered@reductions$umap@cell.embeddings %>%
+  data.frame() %>%
+  dplyr::bind_cols(so.filtered@meta.data)
+
+df %>%
+  .[sample(nrow(.)),] %>%
+  ggplot(aes(umap_1, umap_2, color = orig.ident)) +
+  geom_point(alpha = 0.5)
+
+df %>%
+  .[sample(nrow(.)),] %>%
+  ggplot(aes(umap_1, umap_2, color = orig.ident)) +
+  geom_point(alpha = 0.5) +
+  facet_wrap(~orig.ident)
+```
+
+There are 3 global groups and there are cells from each sample present in each. Generally, the cells from different samples are grouping together.
+
+Strong batch effects, or different experiments, would should strong separation of samples. 
+
+But if we look closely we can see that within the groups there are noticeable local separations of samples. There are also some small groups that look to be totally sample specific. 
+
+It is possible that these are distinct cells separating due to differences in biology between samples, but **generally this is a good indication that we should try integrating.** 
+
+# Methods of integration
+
+There are a number of different methods for integration that are readily available with Seurat... 
+- anchor-based CCA (Canonical Correlation Analysis)
+- anchor-based RPCA
+- Harmony integration
+- fastMNN (Mutual Nearest Neighbor)
+- scVI (deep learning method, requires additional setup)
+
+Other methods not included in Seurat...
+- scANVI (extension of scVI) - deep learning with cell annotations
+- scGEN - deep learning with cell annotations
+- Scanorama - linear embedding
+- ComBat
+
+Several groups have done comparative benchmarking analyses on these various methods.
+
+Harmony and Combat have been shown to work well, particulary for more simple integration tasks. 
+
+For more complex integrations - many datasets, lots of diversity - deep learning approaches like scANVI with cell annotations, and Scanorama appear to perform best. 
+
+We'll explore and compare 3 methods...
+- anchor-based CCA integration
+- RPCA (recipricol PCA)
+- Harmony
+
+## Running Integration
+
+In Seurat V5 multiple integration methods can be performed with a single function `IntegrateLayers()`.
+
+Specific methods ('CCAIntegration', 'Harmony', 'RPCA`)
+
+Normally, `IntegrateLayers()` looks for samples stored as separate layers. With SCTransform the `SCT` assay has cells from different samples concated together into single normalized data and scale.data layer. 
+
+`IntegrateLayers()` has an argument `normalization.method` and we can specify `SCT` so the integration workflows will correctly handle the structure of the SCT assay.
+
+For reference, for `CCA` and `RPCA`, `integratelayers()` will split the SCT assay back into separate batches, before running the integration workflow.
+
+Let's run 3 integrations. For each we'll specify the output reduction name with `new.reduction` to keep them separate.
+
+### CCA - Canonical Correlation Analysis
+
+Similar to PCA, but instead of finding the axes of greatest variation among cells...
+- it finds **anchors** (cells) that are very close between datasets
+- looks for **pairs** of axes (combinations of genes) that correlate well between datasets and scores them 
+
+Uses these scores and anchor cells to then *correct* the cells and bring them *in line*. 
+
+In other words, CCA finds shared sources of variation between batches, and corrects the cell embeddings. 
+
+CCA works best when we know there are shared cell types, and can handle situations with large differences in gene expression.
+
+However, if there are lots of unique cell types or the shared cell types are hard to identify, CCA can lead to over-correction.
+
+
+```{r}
+so.filtered <- Seurat::IntegrateLayers(so.filtered, 
+                                       assay = 'SCT',
+                                       method = CCAIntegration,
+                                       orig.reduction = 'pca',
+                                       normalization.method = "SCT",
+                                       new.reduction = "integrated.cca")
+```
+
+### RPCA - Recipricol PCA 
+
+Runs PCA on the different samples/batches and then projects each batch into the other batch PCA space to find anchors. 
+Faster than CCA and is more conservative. 
+
+Satija lab recommends RPCA when:
+- "A substantial fraction of cells in one dataset have no matching type in the other"
+- "Datasets originate from the same platform (i.e. multiple lanes of 10x genomics)"
+- "There are a large number of datasets or cells to integrate (see here for more tips on integrating large datasets)"
+
+```{r}
+so.filtered <- Seurat::IntegrateLayers(so.filtered, 
+                                       assay = 'SCT',
+                                       method = RPCAIntegration,
+                                       orig.reduction = 'pca',
+                                       normalization.method = "SCT",
+                                       new.reduction = "integrated.rpca")
+```
+
+### Harmony
+
+Harmony uses a fundamentally different approach than CCA or RPCA and does not need to have the data split out by batch. 
+
+Harmony works directly on the dimensionality reduced (PCA) cell embeddings.
+
+Harmony...
+- applies a soft k-means clustering on the cells. 
+- finds the middle (centroid) of the soft cluster
+- determines correction vectors for each batch to pull cells towards centroid
+- repeats until "convergence" -- when cluster assignments are stable or when cluster membership doesn't change 
+
+In benchmarking tests Harmony integration has been shown to generally work "better" than CCA or RPCA. 
+
+It is well suited for integration of multiple batches, and is good at preserving global structures.
+
+```{r}
+so.filtered <- Seurat::IntegrateLayers(so.filtered, 
+                                       assay = 'SCT',
+                                       method = HarmonyIntegration,
+                                       orig.reduction = 'pca',
+                                       normalization.method = "SCT",
+                                       new.reduction = "integrated.harmony")
+```
+
+## Assess Integration
+
+Now that we've run our 3 integrations we have new reductions in our object.
+
+```{r}
+so.filtered@reductions
+```
+
+To evaluate how well these integrations worked we need to rerun UMAP on the new integrated reductions.
+
+```{r}
+so.filtered <- Seurat::RunUMAP(so.filtered, 
+                               assay = 'SCT', 
+                               reduction = 'integrated.cca',
+                               dims = 1:30, 
+                               n.neighbors = 30,
+                               reduction.name = 'cca.umap')
+
+so.filtered <- Seurat::RunUMAP(so.filtered, 
+                               assay = 'SCT', 
+                               reduction = 'integrated.rpca',
+                               dims = 1:30, 
+                               n.neighbors = 30,
+                               reduction.name = 'rpca.umap')
+
+so.filtered <- Seurat::RunUMAP(so.filtered, 
+                               assay = 'SCT', 
+                               reduction = 'integrated.harmony',
+                               dims = 1:30, 
+                               n.neighbors = 30,
+                               reduction.name = 'harmony.umap')
+```
+
+### UMAPs
+
+```{r}
+cca <- so.filtered@reductions$cca.umap@cell.embeddings %>%
+  data.frame() %>% 
+  dplyr::bind_cols(so.filtered@meta.data)
+
+cca %>%
+  .[sample(nrow(.)),] %>%
+  ggplot(aes(ccaumap_1, ccaumap_2, color = orig.ident)) +
+  geom_point(alpha = 0.5)
+
+cca %>%
+  .[sample(nrow(.)),] %>%
+  ggplot(aes(ccaumap_1, ccaumap_2, color = orig.ident)) +
+  geom_point(alpha = 0.5) +
+  facet_wrap(~orig.ident)
+
+
+rpca <- so.filtered@reductions$rpca.umap@cell.embeddings %>%
+  data.frame() %>%
+  dplyr::bind_cols(so.filtered@meta.data)
+
+rpca %>%
+  .[sample(nrow(.)),] %>%
+  ggplot(aes(rpcaumap_1, rpcaumap_2, color = orig.ident)) +
+  geom_point(alpha = 0.5) 
+
+rpca %>%
+  .[sample(nrow(.)),] %>%
+  ggplot(aes(rpcaumap_1, rpcaumap_2, color = orig.ident)) +
+  geom_point(alpha = 0.5) +
+  facet_wrap(~orig.ident)
+
+
+harm <- so.filtered@reductions$harmony.umap@cell.embeddings %>%
+  data.frame() %>%
+  dplyr::bind_cols(so.filtered@meta.data)
+
+harm %>%
+  .[sample(nrow(.)),] %>%
+  ggplot(aes(harmonyumap_1, harmonyumap_2, color = orig.ident)) +
+  geom_point(alpha = 0.5) 
+
+harm %>%
+  .[sample(nrow(.)),] %>%
+  ggplot(aes(harmonyumap_1, harmonyumap_2, color = orig.ident)) +
+  geom_point(alpha = 0.5) +
+  facet_wrap(~orig.ident)
+```
+
+Our data doesn't have a lot of batch effect present, so we don't have a lot to correct for. And we can generally see that all 3 methods seem to do a fine job of remove the some of the sample specific grouping we saw prior to integration.
+
+How do we know which one to use?
+
+Like everything it's a little bit of trial and error. 
+
+But clustering and cell type annotation are helpufl to assess how well integration is working.
+
+Too much integration and we might see different cell types clustering together.
+
+# Clustering
+
+There are 4 general approaches to clustering single cell data.
+
+- k-means
+- Hierarchical
+- Louvain (community-based)
+- Density-based
+
+Seurat clustering uses the Lovain community-based method. 
+
+In Lovain clustering...
+- cells are mapped into a graph network (based on gene expression space)
+- each cell is a node in the graph and edges connect the nearest neighbors
+- groups of nodes (cells) are iteratively optimized to find the connections that are least likely by chance
+
+In Seurat we perform clustering in 2 steps.
+
+1. `FindNeighbors()` 
+  - creates a graph and finds nearest neighbors (KNN)  
+  - determines relationships between cells using reduction  
+  
+2. `FindClusters()` - runs the Lovain algorithm
+
+```{r}
+so.filtered <- Seurat::FindNeighbors(so.filtered, 
+                                     k.param = 20, #default, number of nearest neighbors to consider
+                                     assay = 'SCT',
+#                                     dims = 10, 
+                                     reduction = 'integrated.harmony')
+
+so.filtered <- Seurat::FindClusters(so.filtered, 
+                                    resolution = 0.1)
+
+```
+
+`FindClusters()` adds cluster identities to our cells and to our metadata table. 
+
+```{r}
+harm <- so.filtered@reductions$harmony.umap@cell.embeddings %>%
+  data.frame() %>%
+  dplyr::bind_cols(so.filtered@meta.data)
+
+harm %>%
+  .[sample(nrow(.)),] %>%
+  ggplot(aes(harmonyumap_1, harmonyumap_2, 
+             color = SCT_snn_res.0.1)) +
+  geom_point(alpha = 0.5) +
+  facet_wrap(~orig.ident)
+
+#DimPlot(so.filtered, reduction = 'harmony.umap')
+```
+
