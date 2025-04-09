@@ -350,6 +350,22 @@ The T cells (CD8+ and CD4+) look like what we expected too.
 
 Interestingly, the monocyte cluster includes a cluster of cells that we previously found are pretty low for CD14 - the canonical moncyte marker.
 
+# Finding markers
+
+To further support manual annotation we can also find marker genes within our clusters.
+
+There are two functions for finding markers in Seurat `FindMarkers()` and `FindAllMarkers()`.
+
+`FindMarkers()` is useful for pair-wise comparison of different clusters or some other grouping variable.
+
+`FindAllMarkers()` automates comparison of each cluster (or other variable) to every other cluster.
+
+```{r}
+
+#so.filtered <- Seurat::PrepSCTFindMarkers(so.filtered)
+#so.filtered <- Seurat::FindAllMarkers(so.filtered, assay = 'SCT', group.by = 'SCT_snn_res.0.2')
+```
+
 # Conclusions
 
 Based on this preliminary annotation, it looks like our lower resolution clustering is sufficient to capture the most significant cell types present.
