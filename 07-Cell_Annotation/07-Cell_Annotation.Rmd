@@ -268,7 +268,9 @@ predictions <- Seurat::TransferData(anchorset = anchors,
 so.filtered <- AddMetaData(so.filtered, 
                            metadata = predictions)
 
-so.filtered@meta.data
+DimPlot(so.filtered, 
+        reduction = 'harmony.umap', 
+        group.by = 'predicted.id')
 ```
 
 ## Annotation with SingleR
