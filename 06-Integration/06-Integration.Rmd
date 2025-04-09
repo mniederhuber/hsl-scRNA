@@ -316,3 +316,7 @@ harm %>%
 #DimPlot(so.filtered, reduction = 'harmony.umap')
 ```
 
+```{r}
+save(so.filtered, file = '../so.RData)
+```
+

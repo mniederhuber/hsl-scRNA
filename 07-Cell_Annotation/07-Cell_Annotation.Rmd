@@ -1,0 +1,358 @@
+
+```{r}
+.libPaths("/nas/longleaf/rhel8/apps/r/4.4.0/lib64/R/library")
+options(future.globals.maxSize = 1000 * 1024^2)
+library(Seurat)
+library(SeuratWrappers)
+library(ggplot2)
+library(magrittr)
+library(clustree)
+load('../so.RData')
+```
+
+# Determining clusters
+
+It's tricky to determine exactly how many distinct clusters there are in the data. The best approach is to test a bunch of different clustering resolutions and look at the data. 
+
+A quick way to do that is make a sequence of resolutions and loop through them. 
+
+```{r}
+res <- c(0.05,seq(0.1,0.9,0.1))
+for(r in res){
+  so.filtered <- Seurat::FindClusters(so.filtered, resolution = r)
+}
+```
+
+Then we can visualize the clustering in our umaps. 
+
+Here we use an `lapply()` to loop through the different resolutions and plot a umap for each different clustering.
+
+```{r}
+lapply(res, function(x){
+  res = paste0('SCT_snn_res.',x)
+  DimPlot(so.filtered, 
+          reduction = 'harmony.umap', 
+          label = T,
+          group.by = res)
+})
+```
+
+## clustree
+
+Looking at UMAPs is useful but an easier generalized visualization is a clustered tree plot, which we can generate with the `clustree` package.
+
+These plots show us different resolutions as "rows"/colors and the size of clusters in the size of each circle. Arrows indicate proportions of cells moving between clusters.  
+
+This gives us a sense of how "stable" different clusters are. We can see that cluster 0 (@ res 0.05) is pretty unstable, it divides more and more as we increase resolution, while clusters 2 and 4 are pretty unchanged until higher resolutions.
+
+```{r}
+clustree(so.filtered)
+```
+
+# Cell Annotation
+
+## Manual annotation
+
+A simple approach to determine cell types is to explore the expression of known marker genes of expected cell types. 
+
+This works well if: 
+- we have a good idea of what cells we expect to find, or are more interested in finding specific cells
+- we have validated marker genes
+
+This obviously won't work well if:
+- we're trying to find unexpected cell types
+- we're working with less characterized samples (organisms and/or tissue)
+- the cells are known but the markers are poorly supported/unknown
+
+Our test data are PBMCs (Peripheral Blood Mononuclear Cells) from humans, which should consist of lympocytes (Tcells, Bcells, and NK cells). 
+
+So we have highly characterize samples, with well known cell types and validated markers.
+
+Rough canonical markers:
+- CD19 -- B cells
+- CD3, CD4, CD8A,CD8B, CD27 -- T cells
+- CD14, CD4+, CD3- -- monocytes
+- NCAM1, NKG7, CD3- -- NK cells
+
+```{r}
+bc <- c('CD19','MS4A1')
+tc <- c('CD8A','CD8B','CD4','CD27')
+mons <- c('CD4','CD3G','CD14')
+nks <- c('NCAM1','NKG7','CD3G')
+
+Seurat::FeaturePlot(so.filtered, 
+                    reduction = 'harmony.umap', 
+                    features = tc,
+                    order = T) & 
+  scale_color_gradient(low = 'grey80', high = 'red')
+
+Seurat::FeaturePlot(so.filtered, 
+                    reduction = 'harmony.umap', 
+                    features = nks,
+                    order = T) & 
+  scale_color_gradient(low = 'grey80', high = 'red')
+
+Seurat::FeaturePlot(so.filtered, 
+                    reduction = 'harmony.umap', 
+                    features = bc,
+                    order = T) & 
+  scale_color_gradient(low = 'grey80', high = 'red')
+
+Seurat::FeaturePlot(so.filtered, 
+                    reduction = 'harmony.umap', 
+                    features = mons,
+                    order = T) & 
+  scale_color_gradient(low = 'grey80', high = 'red')
+```
+
+Even with this qualitative approach we can already roughly identify several of the clusters in our data.
+
+We can see a clear T cell group with CD4+ and CD8+ subsets, B cells, NK cells, and a group of CD4+ monocytes. 
+
+But we don't have a great handle on the two small clusters yet. We probably would want to find more markers and pair with some additional unsupervised maker analysis (find markers that define clusters).
+
+We could also use quantitative dot plots to visualize expression of these markers at the cluster lever.
+
+A quantitative dot plot (QDP) shows both the expression of genes (or some other continuous variable) within clusters (or some other grouping variable) and the percentage of cells expressing above 0.
+
+*NOTE* `DotPlot` default uses the `data` layer of the input assay. So with SCT data the values plotted are log-scaled library-size corrected counts. By default `DotPlot` will z-scale the counts to make it easier to compare across genes.
+
+that we can either plot the 
+
+```{r}
+
+pbmc_markers <- c('CD3G','CD4','CD8A','CD8B','CD14','CD19','CD27','MS4A1','NCAM1','NKG7')
+
+Seurat::DotPlot(so.filtered,
+                assay = 'SCT', 
+                group.by = 'SCT_snn_res.0.1',
+                scale = F,
+                features = pbmc_markers) +
+  geom_point(aes(size = pct.exp), shape = 21, color = 'black') +
+  scale_color_gradient(low = 'white', high = 'red') 
+
+DimPlot(so.filtered,
+        reduction = 'harmony.umap', label = T,
+        group.by = 'SCT_snn_res.0.1')
+```
+
+## Scoring with manual labels
+
+We can use the `Seurat` function `AddModuleScore()` to calculate scores per cell with a custom set of features. 
+
+The resulting score is the average expression of genes in each cell minus the average of a random selection of control genes. 
+
+Scores > 0 indicate higher than average expression.
+Scores = 0 indicate average expression
+Scores < 0 indicate lower than average expression. 
+
+```{r}
+# each module needs to be a list
+bc <- list(c('CD19','MS4A1'))
+tc <- list(c('CD3G','CD8A','CD8B','CD4','CD27'))
+mons <- list(c('CD4','CD14'))
+nks <- list(c('NCAM1','NKG7'))
+
+modules <- list(bc,tc,mons,nks) %>%
+  set_names(c('bc','tc','mons','nks'))
+
+# we can then just loop through the list of modules and get scores
+for (mod in names(modules)) {
+ so.filtered <- Seurat::AddModuleScore(so.filtered,
+                                      features = modules[[mod]],
+                                      ctrl = 3,
+                                      name = mod)
+}
+```
+
+Plotting the resulting scores...
+
+```{r}
+FeaturePlot(so.filtered,
+            reduction = 'harmony.umap', 
+            order = T,
+            features = 'tc1') +
+  scale_color_distiller(palette = 'RdBu', limits = c(-1.5,1.5))
+  
+FeaturePlot(so.filtered,
+           reduction = 'harmony.umap', 
+           order = T,
+           features = 'bc1') +
+ scale_color_distiller(palette = 'RdBu', limits = c(-2,2))
+
+FeaturePlot(so.filtered,
+           reduction = 'harmony.umap', 
+           order = T,
+           features = 'mons1') +
+ scale_color_distiller(palette = 'RdBu', limits = c(-2,2))
+
+FeaturePlot(so.filtered,
+           reduction = 'harmony.umap', 
+           order = T,
+           features = 'nks1') +
+ scale_color_distiller(palette = 'RdBu', limits = c(-2,2))
+
+so.filtered@meta.data
+```
+
+
+## Projecting reference data
+
+An alternative approach is to "project" data from a reference dataset that is already annotated (say a reference atlas) into our un-lablled data. 
+
+The basic idea is to first find anchor cells between the two datasets - cells that are pretty similar. 
+
+Then for each cell in the query dataset, the algorithm finds several nearby anchor cells and uses the corresponding anchor in the reference dataset to map a label. 
+
+Each cell gets a potential label along with corresponding prediction and confidence scores.
+
+I've downloaded an additional reference dataset of human CD4+ Tcells from tumor samples. This isn't the best reference for our data since it's limited to CD4+ cells and thus is missing labels we expect to find in our data, but it's sufficient to demonstrate this workflow. 
+
+The dataset is from ProjectTILs -- https://github.com/carmonalab/ProjecTILs?tab=readme-ov-file
+
+First we load in the reference dataset - this is an already processed and labelled seurat object
+
+```{r}
+cd4_ref <- readRDS('../cd4t.rds')
+cd4_ref
+```
+
+Next we normalize with sctransform so it has the same normalization as our query dataset. 
+
+```{r}
+cd4_ref <- SCTransform(cd4_ref)
+```
+
+Then we find transfer anchors and make predicitions. 
+```{r}
+anchors <- Seurat::FindTransferAnchors(query = so.filtered,
+                                       reference = cd4_ref,
+                                       normalization.method = 'SCT')
+
+predictions <- Seurat::TransferData(anchorset = anchors,
+                                    refdata = cd4_ref$functional.cluster,
+                                    dims = 1:30)
+
+## then we can add in the new predictions to our existing metadata
+so.filtered <- AddMetaData(so.filtered, 
+                           metadata = predictions)
+
+so.filtered@meta.data
+```
+
+Looking at our labels we can see that this reference is not general enough for our purposes. The monocyte group is labelled as Treg.
+
+Though, it's potentially useful to see that within our CD4+ Tcell group there's a small pocket of Tregs and a group of Tfh cells.
+
+```{r}
+## the new predictions are store as 
+DimPlot(so.filtered, 
+        reduction = 'harmony.umap', 
+        group.by = 'predicted.id')
+```
+
+```{r}
+cd8_ref <- readRDS('../cd8t.rds')
+
+cd8_ref <- SCTransform(cd8_ref)
+
+anchors <- Seurat::FindTransferAnchors(query = so.filtered,
+                                       reference = cd8_ref,
+                                       normalization.method = 'SCT')
+
+predictions <- Seurat::TransferData(anchorset = anchors,
+                                    refdata = cd8_ref$functional.cluster,
+                                    dims = 1:30)
+
+## then we can add in the new predictions to our existing metadata
+so.filtered <- AddMetaData(so.filtered, 
+                           metadata = predictions)
+
+so.filtered@meta.data
+```
+
+## Annotation with SingleR
+
+A third method is to again use a reference dataset but instead of projecting labels we instead calculate a correlation between query and reference cells to score labels. 
+
+We can do this with the `singleR` package. 
+
+Reference datasets can either be curated atlases of cell type specific gene expression profiles (bulk RNA-seq) or existing single cell datasets with labelled cells. 
+
+Here we'll use the `celldex` package, which has a number of reference bulk RNA-seq expression profiles with curated labels.
+
+Specifically we'll try out the `BlueprintEncodeData` reference, which is a collection of 259 RNA-seq samples including many pure immune cell types.
+
+```{r}
+library(celldex)
+ref <- BlueprintEncodeData()
+
+ref$label.main %>%
+  data.frame('label' = .) %>%
+  ggplot(aes(y = label, fill = label)) +
+  geom_bar() +
+  theme(legend.position = "none")
+```
+
+Singler works by...
+- calculating the Spearman correlation between each cell and each reference profile/cell
+- in the case of reference labels having multiple samples/cells (ie. 100 cells or 10 bulk profiles labeled Bcell)...
+  - singler calculates correlation for each reference and then scores the label using the **80th percentile** of all scores
+- the highest score is used to label the cell
+
+Singler takes a `SingleCellExperiment` object not a `Seurat` object, so we have to convert it first. 
+
+`SingleCellExperiment` does not support different samples as separate layers so we have to first join our layers. 
+
+```{r}
+## we can do a simple pipeline to join layers and then conver to singlecellexperiment
+sce <- so.filtered %>%
+  JoinLayers(assay = 'RNA') %>%
+  Seurat::as.SingleCellExperiment()
+
+## We run singler using the main labels in our reference
+labels <- SingleR::SingleR(test=sce, 
+                           quantile = 0.8,
+                           ref=ref,
+                           labels=ref$label.main)
+
+## this gives us a dataframe with cells as rows and labels as columns
+labels
+```
+
+
+If we want, we can merge our new labels back into our original seurat object metadata. 
+
+```{r}
+## we can do a quick check that all of the rows in the new `labels` are in the same order as our input singlecellexperiment object
+#all(rownames(so.filtered@meta.data) == rownames(labels)) # should be TRUE
+#
+## negative control shuffle -- should be FALSE
+#all(rownames(so.filtered@meta.data[sample(nrow(so.filtered@meta.data)),]) == rownames(labels))
+#
+## because rows are in the same order we can just add labels as a new column
+#so.filtered$labels <- labels$labels
+
+so.filtered <- Seurat::AddMetaData(so.filtered, labels)
+
+DimPlot(so.filtered, 
+        reduction = 'harmony.umap',
+        group.by = 'labels')
+```
+
+Looking at the new labels that match our expectations from manual labeling really well. 
+
+We have our Monocytes, NK cells, and B cells well defined. 
+
+The T cells (CD8+ and CD4+) look like what we expected too.
+
+Interestingly, the monocyte cluster includes a cluster of cells that we previously found are pretty low for CD14 - the canonical moncyte marker.
+
+# Conclusions
+
+Based on this preliminary annotation, it looks like our lower resolution clustering is sufficient to capture the most significant cell types present.
+
+It does look like there are some cells that consistently cluster together despite showing clear differences in marker expression and unsupervised labelling. 
+
+And there's a small patch of cells labelled as monocyte next to our CD8+ T-cells. 
+
