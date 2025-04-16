@@ -31,7 +31,7 @@ We have 2 choices for doing differential gene expression analysis with single-ce
 
 We do not *have* to have biological replicates to perform single-cell differential analysis, but without replicates we cannot make robust conclusions.
 
-For pseudobulk analysis replicates are required. 
+For pseudo-bulk analysis replicates are required. 
 
 
 # Find markers
@@ -302,9 +302,11 @@ This can lead to inflated significance values.
 
 As an alternative approach we can do differential testing like we would in bulk RNA-seq and treat different groups of cells (clusters, cell types, conditions) as single samples.
 
-To do this we have to aggregate the counts in our cells within our groups - AKA **pseudobulk**.
+To do this we have to aggregate the counts in our cells within our groups - AKA **pseudo-bulk**.
 
-To pseudobulk we use the `AggregateExpression()` function.
+## AggregateExpression
+
+To pseudo-bulk we use the `AggregateExpression()` function.
 
 The `group.by` argument can take a single value or vector of variables to determine how counts should be aggregated.
 
@@ -326,9 +328,40 @@ pb@meta.data
 
 Now the "cells" in the dataset correspond to the unique combinations of sample id and cell type label. 
 
+## Alternative - subsetting
+
+Sometimes it is suggested to subset cells to clusters/cell types of interest prior to aggregating.
+
+In other words, if we want to contrast control vs treatment in monocytes - we would first subset our data to just those cells and then aggregate by condition. 
+
+This is most relevant when comparing conditions **within clusters** of cells and not contrasting across clusters - like we want to do below.
+
+Here is how we would do a subset before aggregating to contrast with a specific cell type...
+
+```{r}
+monos <- subset(so.filtered, subset = labels == 'Monocytes')
+DimPlot(monos, reduction = 'harmony.umap', group.by = 'labels')
+```
+
+Now aggregate on just those cells...
+```{r}
+mono.ag <- Seurat::AggregateExpression(monos, 
+                                  assays = "RNA", 
+                                  return.seurat = T, 
+                                  group.by = 'orig.ident') 
+
+mono.ag@meta.data
+
+```
+
+
+## Differential testing
+
 At this point we could either
 - extract the count matrix and follow a standard `DESeq2` or `EdgeR` workflow.
+  - the benefit being that we'll have full control of all settings - model design, significance thresholds, etc. 
 - use `FindMarkers()` and specify `test.use = 'DESeq'`
+  - quick and easy with no additional setup
 
 ```{r}
 
@@ -342,6 +375,8 @@ g5_g1 <- Seurat::FindMarkers(pb,
 g5_g1
 
 ```
+
+And the volcano plot...
 
 ```{r}
 labels <- g5_g1 %>%
@@ -398,7 +433,7 @@ sc.deg
 pb.deg
 ```
 
-We can see similar DEGs in both analyses, but the significance values are highly inflated in the single-cell analyses compared to the pseudobulk. 
+We can see similar DEGs in both analyses, but the significance values are highly inflated in the single-cell analysis compared to the pseudo-bulk. 
 
 # Next steps
 
