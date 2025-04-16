@@ -1,0 +1,408 @@
+
+```{r}
+.libPaths("/nas/longleaf/rhel8/apps/r/4.4.0/lib64/R/library")
+options(future.globals.maxSize = 1000 * 1024^2)
+library(Seurat)
+library(SeuratWrappers)
+library(ggplot2)
+library(magrittr)
+library(clustree)
+library(ggrepel)
+load('../data/so.RData')
+```
+
+# Recap
+
+Last class we clustered our data and obtained preliminary cell type annotations.
+
+```{r}
+
+DimPlot(so.filtered, reduction = 'harmony.umap', group.by = 'SCT_snn_res.0.1')
+DimPlot(so.filtered, reduction = 'harmony.umap', group.by = 'labels')
+```
+
+The next step is to look for genes that are significantly different between clusters/cell types/conditions.
+
+We have 2 choices for doing differential gene expression analysis with single-cell data...
+- single cell differential analysis - using cells and distinct samples and comparing expression between groups of cells
+- pseudo-bulk - aggregating the counts of cells within groups to make "samples" for comparison
+
+## Replicates
+
+We do not *have* to have biological replicates to perform single-cell differential analysis, but without replicates we cannot make robust conclusions.
+
+For pseudobulk analysis replicates are required. 
+
+
+# Find markers
+
+A simple differential analysis is to identify genes that characterize (are enriched) in each cluster. 
+
+This can be done with two functions in Seurat:
+- `FindMarkers()` - pairwise comparison of identities (clusters or other identity)
+- `FindAllMarkers()` - comparison of each cluster to all other clusters (identities)
+
+These methods apply standard statistical tests to compare cells across different groups.
+
+We can use clusters, cell type annotations, or any other grouping variable in our data to define the comparison.
+
+By default `FindMarkers()` uses a **Wilcoxon Rank Sum** test, but a number of other methods are also available. 
+
+### `PrepSCTFindMarkers` 
+
+Because we are using SCTransformed data, we may have to do some additional preprocessing before we can run `FindAllMarkers()`.
+
+The chunk below will throw an error: `Object contains multiple models with unequal library sizes.`
+
+```{r}
+Seurat::FindAllMarkers(so.filtered, 
+                       assay = 'SCT', 
+                       group.by = 'SCT_snn_res.0.2')
+```
+
+Because we have separate models for each sample from SCtransform (`so.filtered@assays$SCT@SCTModel.list`), we have to run `PrepSCTFindMarkers()`.
+
+Why?
+- These sample-specific corrections are good for PCA and other tasks **but not appropriate for differential testing**
+- Need to **reconstruct a unified count matrix** that still corrects for technical variation with 
+
+```{r}
+so.filtered <- Seurat::PrepSCTFindMarkers(so.filtered, assay = 'SCT')
+```
+
+What does `PrepSCTFindMarkers()` do?
+
+You'll see a message from the chunk above: `Recorrecting SCT counts using minimum median counts: 8326`.
+
+`PrepSCTFindMarkers()` finds the **median UMI counts** for each sample, and the takes the **minimum of medians** for all samples.
+
+It then back calculates corrected counts using the SCT models with the **minimum of median UMI** as a shared library size across all samples.
+
+This seems confusing - to use a single library size for all samples - but the rational from the Satija team is to bring samples to a similar baseline sequencing depth.
+
+>[!QUOTE]
+>"If you have two datasets, you learn two noise models using sctransform. In the correction step you then use these individual models and reverse the regression step to estimate the counts (the 'y' in a linear model is what is being estimated where y ~ x.) At this step you also need to tell the model how deep each dataset is being sequenced to - this is where we substitute the minimum of the median UMIs. This ensures the models take into account thr noise model for each dataset while estimating the corrected counts. Hope this helps." - Saket Choudhary (https://github.com/satijalab/seurat/issues/6675)
+
+This will effectively scale down samples with greater sequencing depth.
+
+Because our test data are 4 multiplexed samples I would expect that this recorrection step would not make a major difference.
+
+*However*, remember that one of our samples had appreciably lower median UMI (PBMC_4).
+
+So what we are doing is re-correcting counts and scaling them to the median counts of PBMC_4.
+
+```{r}
+so.filtered@meta.data %>%
+  ggplot(aes('samples',y = nCount_RNA, fill = orig.ident)) +
+  geom_boxplot() +
+  geom_hline(yintercept = 8326, color = 'red' )
+
+```
+
+### FindAllMarkers
+
+Now that the data is prepped we can run `FindAllMarkers()`.
+
+There are a number of parameters to consider:
+- `test.use` -- default is 'wilcox'
+- `group.by` -- what variable to group cells, default will use cell identities (last run clustering)
+- `only.pos` -- whether or not to only return upregulated (positive) markers
+- `min.pct` -- only test genes detected in a minimum % of cells (useful to increase speed)
+- `logfc.threshold` -- only test genes with X-fold difference (default is 0.1) 
+- `max.cells.per.ident` -- downsample each identity group to max number - faster speed at cost of reduced power
+- `random.seed` -- needed to get the same "random" subsample when using `max.cells.per.ident`
+
+```{r}
+# This still takes a while to run, even with the parameters to increase speed
+if(!file.exists('../data/markers.rds')){
+ markers <- Seurat::FindAllMarkers(so.filtered, 
+                                   assay = 'SCT', 
+                                   test.use = 'wilcox', 
+                                   group.by = 'SCT_snn_res.0.1',
+                                   only.pos = TRUE,
+                                   min.pct = 0.3, 
+                                   logfc.threshold = 0.5,
+                                   max.cells.per.ident=5000,
+                                   random.seed = 88)
+
+  saveRDS(markers, file = '../data/markers.rds') 
+}
+
+# Have a pre-run file ready to go
+markers <- readRDS('../data/markers.rds')
+
+markers %>% 
+  dplyr::arrange(cluster,desc(avg_log2FC))
+```
+
+
+### Heatmaps
+
+Heatmaps are very useful to get a high-level understanding of cluster markers.
+
+First let's subset the markers to the top 10 for each cluster.
+
+```{r}
+top10 <- markers %>%
+  dplyr::filter(p_val_adj <= 0.05) %>% # Filter out insignificant markers, this only removes a few 
+  dplyr::group_by(cluster) %>% # then we'll group the dataframe by cluster (grouping lets us apply operations per group)
+  dplyr::arrange(desc(avg_log2FC), .by_group = T) %>% # then we'll arrange by highest to lowes FC (within each group)
+  dplyr::slice_head(n = 10)
+
+top10 
+
+top10 %>%
+  dplyr::filter(cluster == 6) %>%
+  .$gene
+```
+
+```{r}
+Seurat::DoHeatmap(so.filtered,
+                  assay = 'SCT', 
+                  features = top10$gene, 
+                  group.by = 'SCT_snn_res.0.1')
+```
+
+Looking at the heatmap we can make some interesting observations:
+- cluster 0 doesn't have any strong immune cell type markers in the top10 -- labeling indicates these are mostly a mix of CD4 and CD8 Tcells
+  - maybe this supports C0 is a mix of different cell types?
+- clusters 1 and 5 -- both labelled as monocytes
+  - C1 -- classic monocyte markers (CD14, CD163, VCAN)
+  - C5 -- non-classical monocyte markers (FCGR3A/CD16)
+- cluster 2 has CD8A as a marker -- but is a mix of CD4 and CD8 by labeling.
+- cluster 3 has MS4A1 - B cell marker 
+- cluster 4 has GLNY - NK marker
+- cluster 6 (unlabelled) -- markers less consistent, DC markers (CD1C, FCER1A, CLEC4C) 
+- cluster 7 (unlabelled) -- platelet markers (PF4, GP1BB)
+
+So we can see that the monocyte clusters (1, 5) are CD14+ and CD16+ monocyte subtypes!
+And that our unlabelled cluster 7 is likely platelet contamination. 
+
+```{r}
+FeaturePlot(so.filtered, 
+            reduction = 'harmony.umap', 
+            features = c('CD14','FCGR3A'), 
+            order = T) &
+  scale_color_viridis()
+```
+
+# Contrast clusters
+
+We can also use `FindMarkers()` to do more specific contrasts, between clusters or conditions.
+
+Let's try to figure out what drives the separation of the CD8+ Tcells. 
+
+```{r}
+
+DimPlot(so.filtered, reduction = 'harmony.umap', group.by = 'labels')
+DimPlot(so.filtered, reduction = 'harmony.umap', group.by = 'SCT_snn_res.0.9', label = T)
+```
+
+When running `FindMarkers()` we have the same parameters available as before, but can explicitly pass identity variables **or** vectors of cell ids to construct the contrast.
+
+```{r}
+c9_c12 <- Seurat::FindMarkers(so.filtered, 
+                             assay = 'SCT',
+                             slot = 'counts',
+                             test.use = 'wilcox',
+                             group.by = 'SCT_snn_res.0.9',
+                             ident.1 = 9, 
+                             ident.2 = 12)
+
+c9_c12 %>%
+  dplyr::filter(p_val_adj <= 0.01) %>%
+  dplyr::arrange(desc(avg_log2FC)) %>%
+  head(n = 20) %>%
+  rownames(.)
+```
+
+Let's make a volcano plot to visualize these results. 
+
+```{r}
+c9_labels <- c9_c12 %>%
+  dplyr::filter(p_val_adj <= 0.01) %>%
+  dplyr::arrange(desc(avg_log2FC)) %>%
+  head(n = 20) %>%
+  tibble::rownames_to_column(var = 'gene') 
+
+c9_c12 %>%
+  ggplot(aes(x = avg_log2FC, 
+             y = -log(p_val_adj), 
+             color = ifelse(p_val_adj <= 0.05, T, F))) +
+  geom_point(alpha = 0.3) +
+  geom_text_repel(data = c9_labels, 
+                  aes(x = avg_log2FC, 
+                      y = -log(p_val),
+                      label = gene), 
+                  size = 3,
+                  color = 'black', 
+                  bg.color = 'white', 
+                  max.overlaps = Inf) +
+  scale_color_manual(values = c('grey70','red'))
+  
+```
+
+We find cluster 9 is high for KLRB1 (CD161) -- a marker for CD8+ Effector Memory cells. 
+
+```{r}
+c12_labels <- c9_c12 %>%
+  dplyr::filter(avg_log2FC < -1) %>%
+  dplyr::arrange(p_val_adj) %>%
+  head(n = 20) %>%
+  tibble::rownames_to_column(var = 'gene') 
+
+c9_c12 %>%
+  ggplot(aes(x = avg_log2FC, 
+             y = -log(p_val_adj), 
+             color = ifelse(p_val_adj <= 0.05, T, F))) +
+  geom_point(alpha = 0.3) +
+  geom_text_repel(data = c12_labels, 
+                  aes(x = avg_log2FC, 
+                      y = -log(p_val),
+                      label = gene), 
+                  size = 3,
+                  color = 'black', 
+                  bg.color = 'white', 
+                  max.overlaps = Inf) +
+  scale_color_manual(values = c('grey70','red'))
+
+c12_labels$gene
+```
+
+And cluster 12 is high for LEF1 -- an early marker of Tcell development. Supporting our early assesment that this cluster might be naive CD8+ Tcells.
+
+### Contrasting conditions
+
+We can also compare different samples/conditions within cell types or clusters. 
+
+We could either...
+- subset the dataset to our cell type or cluster of interest and then use the sample name variable as our identity class
+- creat a new grouping variabel that combines sample id and cell type
+
+```{r}
+so.filtered$id_by_cell <- paste0(so.filtered$orig.ident,'_',so.filtered$labels)
+
+so.filtered@meta.data$id_by_cell %>%
+  unique()
+```
+
+```{r}
+Seurat::FindMarkers(so.filtered,  
+                    assay = 'SCT', 
+                    slot = 'counts', 
+                    test.use = 'wilcox', 
+                    group.by = 'id_by_cell',ident.1 = 'PBMC_1_Monocytes', ident.2 = 'PBMC_4_Monocytes')
+```
+
+# Pseudo-bulk
+
+So far the differential testing we've used has treated individual cells like independent replicates.
+
+This can lead to inflated significance values.
+
+As an alternative approach we can do differential testing like we would in bulk RNA-seq and treat different groups of cells (clusters, cell types, conditions) as single samples.
+
+To do this we have to aggregate the counts in our cells within our groups - AKA **pseudobulk**.
+
+To pseudobulk we use the `AggregateExpression()` function.
+
+The `group.by` argument can take a single value or vector of variables to determine how counts should be aggregated.
+
+Let's try aggregating counts by sample and cluster.
+
+**NOTE** we are going to use the RNA assay here because we want to use raw counts for the next steps.
+
+```{r}
+pb <- Seurat::AggregateExpression(so.filtered, 
+                                  assays = "RNA", 
+                                  return.seurat = T, # if we just want to return the aggregated count matrix we can set this to FALSE
+                                  group.by = c('SCT_snn_res.0.1','orig.ident')) 
+
+Seurat::Cells(pb)
+
+pb@meta.data
+
+```
+
+Now the "cells" in the dataset correspond to the unique combinations of sample id and cell type label. 
+
+At this point we could either
+- extract the count matrix and follow a standard `DESeq2` or `EdgeR` workflow.
+- use `FindMarkers()` and specify `test.use = 'DESeq'`
+
+```{r}
+
+g5_g1 <- Seurat::FindMarkers(pb, 
+                             test.use = 'DESeq2', 
+                             group.by = 'SCT_snn_res.0.1', 
+                             ident.1 = 'g5', 
+                             ident.2 = 'g1', 
+                             min.cells.group = 2)
+
+g5_g1
+
+```
+
+```{r}
+labels <- g5_g1 %>%
+  dplyr::filter(p_val_adj <= 0.05) %>%
+  dplyr::arrange(desc(abs(avg_log2FC))) %>%
+  head(20) %>%
+  tibble::rownames_to_column(var = 'gene')
+
+pb.deg <- g5_g1 %>%
+  ggplot(aes(avg_log2FC, -log(p_val_adj), color = ifelse(p_val_adj <= 0.05, T, F))) +
+  geom_point() +
+    geom_text_repel(data = labels, 
+                  aes(x = avg_log2FC, 
+                      y = -log(p_val),
+                      label = gene), 
+                  size = 3,
+                  color = 'black', 
+                  bg.color = 'white', 
+                  max.overlaps = Inf)
+
+pb.deg  
+```
+
+Let's quickly compare the same contrast with single-cell differential analysis. 
+
+```{r}
+# First find markers between clusters 5 and 1
+c5_c1 <- Seurat::FindMarkers(so.filtered, 
+                             test.use = 'wilcox', 
+                             group.by = 'SCT_snn_res.0.1', 
+                             ident.1 = 5, 
+                             ident.2 = 1)
+
+## volcano plot with labels
+labels <- c5_c1 %>%
+  dplyr::filter(p_val_adj <= 0.05) %>%
+  dplyr::arrange(desc(abs(avg_log2FC))) %>%
+  head(20) %>%
+  tibble::rownames_to_column(var = 'gene')
+
+sc.deg <- c5_c1 %>%
+  ggplot(aes(avg_log2FC, -log(p_val_adj), color = ifelse(p_val_adj <= 0.05, T, F))) +
+  geom_point() +
+    geom_text_repel(data = labels, 
+                  aes(x = avg_log2FC, 
+                      y = -log(p_val),
+                      label = gene), 
+                  size = 3,
+                  color = 'black', 
+                  bg.color = 'white', 
+                  max.overlaps = Inf)
+
+sc.deg 
+pb.deg
+```
+
+We can see similar DEGs in both analyses, but the significance values are highly inflated in the single-cell analyses compared to the pseudobulk. 
+
+# Next steps
+
+After finding markers/DEGs we can apply standard analytical methods to understand the biological significance of these gene lists. 
+
+- GSEA, GSVA
+- Gene ontology 

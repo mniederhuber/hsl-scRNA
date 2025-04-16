@@ -1,13 +1,15 @@
 
 ```{r}
 .libPaths("/nas/longleaf/rhel8/apps/r/4.4.0/lib64/R/library")
-options(future.globals.maxSize = 1000 * 1024^2)
 library(Seurat)
 library(SeuratWrappers)
 library(ggplot2)
 library(magrittr)
 library(clustree)
-load('../so.RData')
+library(celldex)
+options(future.globals.maxSize = 1000 * 1024^2)
+
+load('../data/so.RData')
 ```
 
 # Determining clusters
@@ -213,7 +215,7 @@ The dataset is from ProjectTILs -- https://github.com/carmonalab/ProjecTILs?tab=
 First we load in the reference dataset - this is an already processed and labelled seurat object
 
 ```{r}
-cd4_ref <- readRDS('../cd4t.rds')
+cd4_ref <- readRDS('../data/cd4t.rds')
 cd4_ref
 ```
 
@@ -252,7 +254,7 @@ DimPlot(so.filtered,
 ```
 
 ```{r}
-cd8_ref <- readRDS('../cd8t.rds')
+cd8_ref <- readRDS('../data/cd8t.rds')
 
 cd8_ref <- SCTransform(cd8_ref)
 
@@ -286,7 +288,6 @@ Here we'll use the `celldex` package, which has a number of reference bulk RNA-s
 Specifically we'll try out the `BlueprintEncodeData` reference, which is a collection of 259 RNA-seq samples including many pure immune cell types.
 
 ```{r}
-library(celldex)
 ref <- BlueprintEncodeData()
 
 ref$label.main %>%
@@ -334,8 +335,7 @@ If we want, we can merge our new labels back into our original seurat object met
 #
 ## because rows are in the same order we can just add labels as a new column
 #so.filtered$labels <- labels$labels
-
-so.filtered <- Seurat::AddMetaData(so.filtered, labels)
+so.filtered <- Seurat::AddMetaData(so.filtered, labels$pruned.labels, col.name = 'labels')
 
 DimPlot(so.filtered, 
         reduction = 'harmony.umap',
@@ -373,4 +373,8 @@ Based on this preliminary annotation, it looks like our lower resolution cluster
 It does look like there are some cells that consistently cluster together despite showing clear differences in marker expression and unsupervised labelling. 
 
 And there's a small patch of cells labelled as monocyte next to our CD8+ T-cells. 
+
+```{r}
+save(so.filtered, file = '../data/so.RData')
+```
 
